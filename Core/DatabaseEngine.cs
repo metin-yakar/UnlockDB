@@ -112,7 +112,7 @@ namespace AxarDB.Core
              {
                  var logEntry = new 
                  {
-                     timestamp = DateTime.UtcNow,
+                     timestamp = ServerTime.Now,
                      ip = context.IpAddress,
                      user = context.User,
                      type = context.IsView ? "view_mysql" : "script_mysql",
@@ -126,7 +126,7 @@ namespace AxarDB.Core
                  };
                  
                  var json = System.Text.Json.JsonSerializer.Serialize(logEntry);
-                 var path = Path.Combine(_basePath, "request_logs", $"{DateTime.UtcNow:yyyy-MM-dd}_mysql.log"); // Separate or same? User said "standard log types".
+                 var path = Path.Combine(_basePath, "request_logs", $"{ServerTime.Now:yyyy-MM-dd}_mysql.log"); // Separate or same? User said "standard log types".
                  
                  //FOR AI TESTING PURPOSES
                  // Actually Logger.LogRequest format is specific pipe-delimited. 
@@ -134,7 +134,7 @@ namespace AxarDB.Core
                  // Let's stick to existing Logger class structure OR extend it.
                  // Given the complexity of SQL logs, JSON might be better but let's try to fit into Logger.
                  // However, "request_log" usually implies HTTP requests in this project. 
-                 // The prompt says "request_log, error_log... detayları ilgili log tiplerinin standardına uygun olarak kayda düşmelidir".
+                 // The prompt specified that request_log, error_log, etc. should be written according to the standard format of the relevant log type.
                  // I will use a new method in Logger or just append to a dedicated mysql log file to avoid polluting HTTP logs 
                  // OR I simply use Logger.LogRequest if it fits? 
                  // Logger.LogRequest takes (ip, user, json, duration, success).
@@ -252,9 +252,65 @@ namespace AxarDB.Core
             engine.SetValue("decrypt", new Func<string, string, string>(AxarDB.Helpers.ScriptUtils.Decrypt));
             engine.SetValue("split", new Func<string, string, string[]>(AxarDB.Helpers.ScriptUtils.Split));
             engine.SetValue("toDecimal", new Func<string, decimal>(AxarDB.Helpers.ScriptUtils.ToDecimal));
-            engine.SetValue("guid", new Func<string>(() => Guid.NewGuid().ToString()));
+            engine.SetValue("guid", new Func<string>(() => AxarDB.Helpers.GuidV7.NewGuid().ToString()));
+
+            // --- UUID v7 Functions ---
+            // guidv7()             → new UUID v7 using the current UTC time
+            // guidv7(datetime)     → new UUID v7 using the supplied datetime string (ISO 8601)
+            // guidv7CreatedAt(str) → extracts the creation timestamp (UTC) from a UUID v7 string
+            engine.SetValue("guidv7", new Func<object?, string>(arg =>
+            {
+                if (arg == null || arg is Jint.Native.JsValue jsv && jsv.IsNull() || arg is Jint.Native.JsValue jsv2 && jsv2.IsUndefined())
+                    return AxarDB.Helpers.GuidV7.NewGuid().ToString();
+
+                var argStr = arg.ToString();
+                if (string.IsNullOrWhiteSpace(argStr))
+                    return AxarDB.Helpers.GuidV7.NewGuid().ToString();
+
+                if (DateTimeOffset.TryParse(argStr, null,
+                        System.Globalization.DateTimeStyles.AssumeUniversal |
+                        System.Globalization.DateTimeStyles.AdjustToUniversal,
+                        out var dto))
+                    return AxarDB.Helpers.GuidV7.NewGuid(dto).ToString();
+
+                throw new InvalidOperationException(
+                    $"guidv7(): Invalid datetime format '{argStr}'. Use ISO 8601, e.g. '2024-01-15T10:30:00Z'.");
+            }));
+
+            engine.SetValue("guidv7CreatedAt", new Func<string, object?>(guidStr =>
+            {
+                if (string.IsNullOrWhiteSpace(guidStr))
+                    return null;
+                var ts = AxarDB.Helpers.GuidV7.GetTimestamp(guidStr);
+                return ts.HasValue ? (object)ts.Value.UtcDateTime : null;
+            }));
             engine.SetValue("toJson", new Func<object, string>(o => System.Text.Json.JsonSerializer.Serialize(o, new System.Text.Json.JsonSerializerOptions { WriteIndented = true })));
             engine.SetValue("csv", new Func<object, object>(AxarDB.Helpers.ScriptUtils.Csv));
+
+            // addSysUser(username, password) — safely add a user to sysusers
+            engine.SetValue("addSysUser", new Func<string, string, object>((username, password) =>
+            {
+                if (string.IsNullOrWhiteSpace(username)) throw new InvalidOperationException("username cannot be empty.");
+                if (string.IsNullOrWhiteSpace(password)) throw new InvalidOperationException("password cannot be empty.");
+                var col = GetCollection("sysusers");
+                // Check duplicate
+                if (col.FindAll(d => d.TryGetValue("username", out var u) && string.Equals(u?.ToString(), username, StringComparison.OrdinalIgnoreCase)).Any())
+                    throw new InvalidOperationException($"User '{username}' already exists.");
+                var hashed = AxarDB.Helpers.ScriptUtils.SHA256(password);
+                col.Insert(new Dictionary<string, object> { { "username", username }, { "password", hashed } }, bypassSystemRules: true);
+                return new { username, status = "created" };
+            }));
+
+            // deleteSysUser(username) — safely remove a user from sysusers
+            engine.SetValue("deleteSysUser", new Func<string, object>((username) =>
+            {
+                if (string.IsNullOrWhiteSpace(username)) throw new InvalidOperationException("username cannot be empty.");
+                if (username.Equals("unlocker", StringComparison.OrdinalIgnoreCase))
+                    throw new InvalidOperationException("The default 'unlocker' user cannot be deleted.");
+                var col = GetCollection("sysusers");
+                col.Delete(d => d.TryGetValue("username", out var u) && string.Equals(u?.ToString(), username, StringComparison.OrdinalIgnoreCase));
+                return new { username, status = "deleted" };
+            }));
             
             // Join Alias Utility
             engine.SetValue("alias", new Func<object, string, AliasWrapper>((source, name) => new AliasWrapper(source, name)));
@@ -376,6 +432,33 @@ namespace AxarDB.Core
                     if (typeof str !== 'string') str = String(str);
                     return this.toLowerCase().indexOf(str.toLowerCase()) === 0;
                 };
+
+                // Array includes check (similar to LINQ Contains/SequenceEqual depending on usage)
+                Object.defineProperty(Object.prototype, 'includes', {
+                    value: function(arr) {
+                        if (Array.isArray(arr)) {
+                            // If the item itself is an array, we act like SequenceEqual
+                            if (Array.isArray(this.valueOf())) {
+                                let self = this.valueOf();
+                                if (self.length !== arr.length) return false;
+                                for (let i = 0; i < self.length; i++) {
+                                    if (self[i] !== arr[i]) return false;
+                                }
+                                return true;
+                            } else {
+                                // If it's a single element, act like Contains
+                                return arr.includes(this.valueOf());
+                            }
+                        }
+                        if (typeof this.valueOf() === 'string' && typeof arr === 'string') {
+                            return this.valueOf().includes(arr);
+                        }
+                        return false;
+                    },
+                    enumerable: false,
+                    configurable: true,
+                    writable: true
+                });
             ");
         }
 
@@ -385,6 +468,27 @@ namespace AxarDB.Core
             {
                 throw new InvalidOperationException($"System collection '{name}' cannot be deleted.");
             }
+
+            // --- Backup Query: DeleteCollection ---
+            try
+            {
+                var collection = GetCollection(name);
+                var docs = collection.FindAll().ToList();
+                if (docs.Count > 0)
+                {
+                    foreach (var doc in docs)
+                    {
+                        var json = System.Text.Json.JsonSerializer.Serialize(doc);
+                        var query = $"db.{name}.insert({json})";
+                        AxarDB.Core.BackupQuery.LogRecoveryQuery(_basePath, query);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                AxarDB.Logging.Logger.LogError($"[BackupQuery Error] Failed to create backup query for delete collection: {ex.Message}");
+            }
+            // -----------------------------
 
             if (_collections.TryRemove(name, out _))
             {
@@ -437,12 +541,15 @@ namespace AxarDB.Core
             Console.WriteLine($"  - Max Recursion Depth: {Settings.MaxRecursionDepth}");
             Console.WriteLine($"  - Query Timeout Minutes: {Settings.QueryTimeoutMinutes} min");
             Console.WriteLine($"  - Queue Poll Interval: {Settings.QueuePollIntervalSeconds} sec");
+            Console.WriteLine($"  - Timezone Offset: {Settings.TimezoneOffset} (UTC{Settings.TimezoneOffset:+#;-#;+0})");
 
-            AxarDB.Logging.Logger.LogDebug($"[AxarDB] Settings: MemoryLimitPercentage={Settings.MemoryLimitPercentage}, BulkStoreMaxCacheBytes={Settings.BulkStoreMaxCacheBytes}, MaxRecursionDepth={Settings.MaxRecursionDepth}, QueryTimeoutMinutes={Settings.QueryTimeoutMinutes}, QueuePollIntervalSeconds={Settings.QueuePollIntervalSeconds}");
+            AxarDB.Logging.Logger.LogDebug($"[AxarDB] Settings: MemoryLimitPercentage={Settings.MemoryLimitPercentage}, BulkStoreMaxCacheBytes={Settings.BulkStoreMaxCacheBytes}, MaxRecursionDepth={Settings.MaxRecursionDepth}, QueryTimeoutMinutes={Settings.QueryTimeoutMinutes}, QueuePollIntervalSeconds={Settings.QueuePollIntervalSeconds}, TimezoneOffset={Settings.TimezoneOffset}");
 
             // Create default system collection
             GetCollection("sysusers");
             GetCollection("sysqueue"); // Initialize queue collection
+            GetCollection("sysconfig"); // Initialize config collection
+            GetCollection("syslogs"); // Initialize logs collection
             // Add default user
             var sysusers = GetCollection("sysusers");
             // Check via storage if empty
@@ -453,6 +560,44 @@ namespace AxarDB.Core
                     { "username", "unlocker" },
                     { "password", "unlocker" }
                 });
+            }
+
+            // Seed default configuration settings if empty
+            var sysconfig = GetCollection("sysconfig");
+            var existingConfigs = sysconfig.FindAll().ToList();
+            var defaultConfigs = new Dictionary<string, object>
+            {
+                { "memoryLimitPercentage", Settings.MemoryLimitPercentage },
+                { "bulkStoreMaxCacheBytes", Settings.BulkStoreMaxCacheBytes },
+                { "maxRecursionDepth", Settings.MaxRecursionDepth },
+                { "queryTimeoutMinutes", Settings.QueryTimeoutMinutes },
+                { "queuePollIntervalSeconds", Settings.QueuePollIntervalSeconds },
+                { "timezoneOffset", Settings.TimezoneOffset }
+            };
+
+            if (!existingConfigs.Any())
+            {
+                sysconfig.Insert(defaultConfigs, bypassSystemRules: true);
+            }
+            else
+            {
+                var currentConfig = existingConfigs.First();
+                var updatedConfig = new Dictionary<string, object>(currentConfig);
+                bool changed = false;
+
+                foreach (var kvp in defaultConfigs)
+                {
+                    if (!currentConfig.ContainsKey(kvp.Key))
+                    {
+                        updatedConfig[kvp.Key] = kvp.Value;
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                {
+                    sysconfig.UpdateExisting(updatedConfig, currentConfig, bypassSystemRules: true);
+                }
             }
         }
 
@@ -471,6 +616,7 @@ namespace AxarDB.Core
                     list.Add(key);
                 }
             }
+            list.Add("syslogs");
             var dataPath = Path.Combine(_basePath, "Data");
             if (Directory.Exists(dataPath))
             {
@@ -542,13 +688,69 @@ namespace AxarDB.Core
                 }
             }
 
-            // Create a new engine for scope isolation with constraints
+            // Build a fresh Jint engine per script execution. The engine captures
+            // the cancellation token at construction time, so a cached/shared
+            // engine would permanently bind to the first request's abort token
+            // and cancel every subsequent script once that request completes.
+            var engine = CreateScriptEngine(cancellationToken, ctx);
+
+            // Execute user script. A fresh engine per call keeps each request's
+            // cancellation token and global scope isolated.
+            var result = engine.Evaluate(script);
+
+            // Convert result back to native object if possible
+            var obj = result.ToObject();
+            
+            // Auto-materialize queries to list if not done by user
+            if (obj is JoinCollectionBridge joinBridge)
+            {
+                return joinBridge.toList();
+            }
+            if (obj is ResultSet resultSet)
+            {
+                return resultSet.ToList();
+            }
+            if (obj is CollectionBridge colBridge)
+            {
+                return colBridge.findall().ToList();
+            }
+            if (obj is AxarDB.Bridges.MemoryResultSet mrs)
+            {
+                return mrs.ToList();
+            }
+            if (obj is AxarDB.Bridges.BulkResultSet brs)
+            {
+                return brs.ToList();
+            }
+            if (obj is AxarDB.Bridges.MemoryCollectionBridge mcb)
+            {
+                return mcb.findall().ToList();
+            }
+            if (obj is AxarDB.Bridges.BulkCollectionBridge bcb)
+            {
+                return bcb.findall().ToList();
+            }
+            if (obj is AxarDB.Bridges.LogCollectionBridge lcb)
+            {
+                return lcb.findall().ToList();
+            }
+
+            return obj;
+        }
+
+        /// <summary>
+        /// Creates a fully configured Jint engine bound to the supplied
+        /// cancellation token. Called once per <see cref="ExecuteScript"/> so the
+        /// engine never inherits a stale request-aborted token from a previous call.
+        /// </summary>
+        private Engine CreateScriptEngine(CancellationToken cancellationToken, ScriptContext ctx)
+        {
             var engine = new Engine(options => {
                  options.AllowClr();
                  options.CancellationToken(cancellationToken);
                  options.LimitRecursion(Settings.MaxRecursionDepth);
                  options.TimeoutInterval(TimeSpan.FromMinutes(Settings.QueryTimeoutMinutes));
-            });
+             });
 
             // Expose console.log for CLI scripts and debugging
             engine.SetValue("console", new { log = new Action<object>(o => AxarDB.Logging.Logger.LogDebug(FormatLog(o))) });
@@ -571,6 +773,15 @@ namespace AxarDB.Core
 
             // Expose 'UnlockDB' constructor: new UnlockDB("name")
             engine.SetValue("AxarDB", new Func<string, CollectionBridge>(name => {
+                if (name.StartsWith("sys", StringComparison.OrdinalIgnoreCase) &&
+                    !name.Equals("sysusers", StringComparison.OrdinalIgnoreCase) &&
+                    !name.Equals("sysqueue", StringComparison.OrdinalIgnoreCase) &&
+                    !name.Equals("sysvaults", StringComparison.OrdinalIgnoreCase) &&
+                    !name.Equals("sysconfig", StringComparison.OrdinalIgnoreCase) &&
+                    !name.Equals("syslogs", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new InvalidOperationException($"System collection name '{name}' is reserved.");
+                }
                 return new CollectionBridge(this, GetCollection(name), engine, cancellationToken);
             }));
 
@@ -582,14 +793,12 @@ namespace AxarDB.Core
                 return col.Indices.Select(i => new { PropertyName = i.PropertyName, Type = i.Type }).ToList();
             }));
 
+            engine.SetValue("addVault", new Func<string, object, bool>((key, value) => AddVault(key, value)));
+
             // --- Utility Functions ---
             RegisterUtils(engine, ctx);
-            
-            // Execute
-            var result = engine.Evaluate(script);
-            
-            // Convert result back to native object if possible
-            return result.ToObject();
+
+            return engine;
         }
 
         private bool IsValidInput(string input)
@@ -649,7 +858,7 @@ namespace AxarDB.Core
                 col.Insert(new Dictionary<string, object> { 
                     { "key", key }, 
                     { "value", value },
-                    { "created", DateTime.UtcNow }
+                    { "created", ServerTime.Now }
                 });
             }
             return true;
@@ -658,7 +867,7 @@ namespace AxarDB.Core
         private string QueueJob(string template, object? parameters, object? options)
         {
             var sysqueue = GetCollection("sysqueue");
-            var id = Guid.NewGuid().ToString();
+            var id = AxarDB.Helpers.GuidV7.NewGuid().ToString();
             
             var job = new Dictionary<string, object>
             {
@@ -666,7 +875,7 @@ namespace AxarDB.Core
                 { "queryTemplate", template },
                 { "parameters", parameters! }, // Stored as provided (Dict or Array)
                 { "options", options! },
-                { "createdAt", DateTime.UtcNow },
+                { "createdAt", ServerTime.Now },
                 { "executionTime", null! }, // null means pending
                 { "priority", 0 }, // Default priority
                 { "duration", 0 },
@@ -830,7 +1039,7 @@ namespace AxarDB.Core
                 {
                     clientIp,
                     user,
-                    timestamp = DateTime.UtcNow,
+                    timestamp = ServerTime.Now,
                     durationMs = sw.ElapsedMilliseconds,
                     error,
                     console = consoleLogs,
@@ -838,7 +1047,7 @@ namespace AxarDB.Core
                 };
                 
                 var logJson = System.Text.Json.JsonSerializer.Serialize(logEntry, new System.Text.Json.JsonSerializerOptions { WriteIndented = true });
-                File.WriteAllText(Path.Combine(GetLogsPath(), $"{viewName}_{DateTime.UtcNow.Ticks}.json"), logJson, Encoding.UTF8);
+                File.WriteAllText(Path.Combine(GetLogsPath(), $"{viewName}_{ServerTime.Now.Ticks}.json"), logJson, Encoding.UTF8);
             }
             
             return result;
@@ -859,11 +1068,42 @@ namespace AxarDB.Core
 
         public void SaveView(string name, string content)
         {
+            // --- Backup Query: SaveView ---
+            try
+            {
+                var oldContent = GetViewContent(name);
+                var query = oldContent != null 
+                    ? $"db.saveView('{name}', {System.Text.Json.JsonSerializer.Serialize(oldContent)})" 
+                    : $"db.deleteView('{name}')";
+                AxarDB.Core.BackupQuery.LogRecoveryQuery(_basePath, query);
+            }
+            catch (Exception ex)
+            {
+                AxarDB.Logging.Logger.LogError($"[BackupQuery Error] Failed to create backup query for SaveView: {ex.Message}");
+            }
+            // -----------------------------
+
             File.WriteAllText(Path.Combine(GetViewsPath(), name + ".js"), content, Encoding.UTF8);
         }
 
         public void DeleteView(string name)
         {
+            // --- Backup Query: DeleteView ---
+            try
+            {
+                var oldContent = GetViewContent(name);
+                if (oldContent != null)
+                {
+                    var query = $"db.saveView('{name}', {System.Text.Json.JsonSerializer.Serialize(oldContent)})";
+                    AxarDB.Core.BackupQuery.LogRecoveryQuery(_basePath, query);
+                }
+            }
+            catch (Exception ex)
+            {
+                AxarDB.Logging.Logger.LogError($"[BackupQuery Error] Failed to create backup query for DeleteView: {ex.Message}");
+            }
+            // -----------------------------
+
             var path = Path.Combine(GetViewsPath(), name + ".js");
             if (File.Exists(path)) File.Delete(path);
         }
@@ -932,6 +1172,11 @@ namespace AxarDB.Core
                     // Path: Data/CollectionName/doc.json OR Data/CollectionName/_id_wrapper if shards (but current impl is simple)
                     // Current DiskStorage: Data/CollectionName/{guid}.json
                     
+                    // Index files (idx_*.json) are metadata, not documents — ignore them so the
+                    // watcher doesn't treat index writes as document changes.
+                    if (Path.GetFileName(fullPath).StartsWith("idx_", StringComparison.OrdinalIgnoreCase))
+                        return;
+
                     var relative = Path.GetRelativePath(Path.Combine(_basePath, "Data"), fullPath);
                     var parts = relative.Split(Path.DirectorySeparatorChar);
                     
@@ -994,7 +1239,7 @@ namespace AxarDB.Core
                     type,
                     collection = col,
                     documentId = docId,
-                    timestamp = DateTime.UtcNow
+                    timestamp = ServerTime.Now
                 });
 
                 engine.Evaluate(script);
@@ -1019,14 +1264,14 @@ namespace AxarDB.Core
                 var logEntry = new 
                 {
                     trigger = triggerName,
-                    timestamp = DateTime.UtcNow,
+                    timestamp = ServerTime.Now,
                     durationMs = duration,
                     error,
                     console = logs
                 };
                 
                 var line = System.Text.Json.JsonSerializer.Serialize(logEntry);
-                var filename = $"{DateTime.UtcNow:yyyy-MM-dd}.log";
+                var filename = $"{ServerTime.Now:yyyy-MM-dd}.log";
                 var path = Path.Combine(GetTriggerLogsPath(), filename);
                 
                 // Simple file append with lock to ensure thread safety
@@ -1055,6 +1300,27 @@ namespace AxarDB.Core
 
         public void SaveTrigger(string name, string targetCollection, string content)
         {
+            // --- Backup Query: SaveTrigger ---
+            try
+            {
+                var oldContent = GetTriggerContent(name);
+                if (oldContent != null)
+                {
+                    var query = $"db.saveTrigger('{name}', '{targetCollection}', {System.Text.Json.JsonSerializer.Serialize(oldContent)})";
+                    AxarDB.Core.BackupQuery.LogRecoveryQuery(_basePath, query);
+                }
+                else
+                {
+                    var query = $"db.deleteTrigger('{name}')";
+                    AxarDB.Core.BackupQuery.LogRecoveryQuery(_basePath, query);
+                }
+            }
+            catch (Exception ex)
+            {
+                AxarDB.Logging.Logger.LogError($"[BackupQuery Error] Failed to create backup query for SaveTrigger: {ex.Message}");
+            }
+            // -----------------------------
+
             if (!content.Contains("@target"))
             {
                 content = $"// @target {targetCollection}\n" + content;
@@ -1066,6 +1332,22 @@ namespace AxarDB.Core
 
         public void DeleteTrigger(string name)
         {
+            // --- Backup Query: DeleteTrigger ---
+            try
+            {
+                var oldContent = GetTriggerContent(name);
+                if (oldContent != null)
+                {
+                    var query = $"db.saveTrigger('{name}', '*', {System.Text.Json.JsonSerializer.Serialize(oldContent)})";
+                    AxarDB.Core.BackupQuery.LogRecoveryQuery(_basePath, query);
+                }
+            }
+            catch (Exception ex)
+            {
+                AxarDB.Logging.Logger.LogError($"[BackupQuery Error] Failed to create backup query for DeleteTrigger: {ex.Message}");
+            }
+            // -----------------------------
+
             var path = Path.Combine(GetTriggersPath(), name + ".js");
             if (File.Exists(path)) File.Delete(path);
         }

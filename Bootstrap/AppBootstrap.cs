@@ -26,7 +26,7 @@ namespace AxarDB.Bootstrap
             Console.OutputEncoding = Encoding.UTF8;
 
             var startupOptions = StartupOptions.Parse(args);
-            var settings = ConfigHelper.LoadSettings(args);
+            var settings = ConfigHelper.LoadSettings(startupOptions.TargetPath);
 
             if (startupOptions.IsScript)
             {
@@ -89,6 +89,11 @@ namespace AxarDB.Bootstrap
             builder.Services.AddSingleton(dbEngine);
             builder.Services.AddSingleton(settings);
             builder.Services.AddHostedService<AxarDB.BackgroundServices.QueueProcessor>();
+
+            builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =>
+            {
+                options.SerializerOptions.Converters.Add(new AxarDB.Helpers.BigIntegerConverter());
+            });
 
             builder.Services.AddCors(options =>
             {

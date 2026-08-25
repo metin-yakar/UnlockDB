@@ -7,5 +7,6 @@ namespace AxarDB.Definitions
         public int MaxRecursionDepth { get; set; } = 100;
         public int QueryTimeoutMinutes { get; set; } = 10;
         public double QueuePollIntervalSeconds { get; set; } = 1.0;
+        public double TimezoneOffset { get; set; } = 3.0;
     }
 }

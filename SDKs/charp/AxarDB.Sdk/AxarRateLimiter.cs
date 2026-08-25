@@ -34,7 +34,7 @@ namespace AxarDB.Sdk
             // "The application will follow a rate limit system... optional... When restricted, log info."
             
             // It seems "WithRateLimit" might be generating the restriction KEY and passing it to the server?
-            // NO, "SDK... belleğinden takip edeceği". It's client-side.
+            // NO, the SDK tracks this entirely in client-side memory. It's client-side.
             // But where is the LIMIT defined? 
             // I'll add a separate configuration method/dictionary to map "type" -> "maxRequests".
             // For now, I'll default to 100 if not specified, or allow configuration.

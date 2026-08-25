@@ -155,6 +155,93 @@ namespace AxarDB.Extensions
                 var snapshot = AxarDB.Metrics.MetricsCollector.Instance.GetSnapshot(Path.Combine(dbEngine.BasePath, "Data"));
                 return Results.Json(snapshot);
             });
+
+            app.MapGet("/api/rag-doc", async () =>
+            {
+                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Docs", "llm_ragfile_en.md");
+                if (!File.Exists(path)) {
+                    path = Path.Combine(Directory.GetCurrentDirectory(), "Docs", "llm_ragfile_en.md");
+                }
+                if (File.Exists(path))
+                {
+                    var content = await File.ReadAllTextAsync(path);
+                    return Results.Text(content, "text/markdown");
+                }
+                return Results.NotFound(new { error = "Rag doc not found" });
+            });
+
+            app.MapPost("/api/ai-query", async (HttpContext context) =>
+            {
+                using var reader = new StreamReader(context.Request.Body, Encoding.UTF8);
+                var body = await reader.ReadToEndAsync();
+                
+                var json = System.Text.Json.JsonDocument.Parse(body);
+                var root = json.RootElement;
+                
+                string apiUrl = root.TryGetProperty("apiUrl", out var urlEl) ? urlEl.GetString() ?? "" : "";
+                string modelName = root.TryGetProperty("modelName", out var modEl) ? modEl.GetString() ?? "" : "";
+                string apiKey = root.TryGetProperty("apiKey", out var keyEl) ? keyEl.GetString() ?? "" : "";
+                string query = root.TryGetProperty("query", out var queryEl) ? queryEl.GetString() ?? "" : "";
+                string schemaContext = root.TryGetProperty("schemaContext", out var schemaEl) ? schemaEl.GetString() ?? "" : "";
+
+                if (string.IsNullOrEmpty(apiUrl)) return Results.Problem("API URL is required", statusCode: 400);
+                if (string.IsNullOrEmpty(modelName)) return Results.Problem("Model Name is required", statusCode: 400);
+                if (string.IsNullOrEmpty(apiKey)) return Results.Problem("API Key is required", statusCode: 400);
+
+                var path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Docs", "llm_ragfile_en.md");
+                if (!File.Exists(path)) {
+                    path = Path.Combine(Directory.GetCurrentDirectory(), "Docs", "llm_ragfile_en.md");
+                }
+                string ragContent = "";
+                if (File.Exists(path)) {
+                    ragContent = await File.ReadAllTextAsync(path);
+                }
+
+                var systemPrompt = "You are an expert AxarDB Query assistant. AxarDB is a JavaScript-based in-memory NoSQL database. IT IS NOT MONGODB!\n" +
+                                   "CRITICAL RULES:\n" +
+                                   "1. NEVER use MongoDB syntax (e.g. { age: { $gt: 18 } }). Queries use JavaScript arrow functions (e.g. x => x.age > 18).\n" +
+                                   "2. 'findOne()' DOES NOT EXIST. Use 'find(predicate)' to get a single item, or 'findall(predicate)' to get multiple.\n" +
+                                   "3. Read the provided Context carefully and follow its exact syntax.\n" +
+                                   "4. Return ONLY the raw JavaScript query code. No markdown formatting, no explanations, no ````javascript` blocks. The user will execute this code directly.\n\n" +
+                                   "Database Schema (First record of each collection):\n" + schemaContext + "\n\n" +
+                                   "Context:\n" + ragContent;
+
+                var payload = new
+                {
+                    model = modelName,
+                    messages = new[]
+                    {
+                        new { role = "system", content = systemPrompt },
+                        new { role = "user", content = query }
+                    },
+                    temperature = 0.2
+                };
+
+                using var httpClient = new System.Net.Http.HttpClient();
+                if (!string.IsNullOrEmpty(apiKey))
+                {
+                    httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", apiKey);
+                }
+                
+                var content = new System.Net.Http.StringContent(System.Text.Json.JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+                
+                try
+                {
+                    var response = await httpClient.PostAsync(apiUrl, content);
+                    var responseString = await response.Content.ReadAsStringAsync();
+                    
+                    if (!response.IsSuccessStatusCode)
+                    {
+                        return Results.Problem(responseString, statusCode: (int)response.StatusCode);
+                    }
+
+                    return Results.Text(responseString, "application/json");
+                }
+                catch (Exception ex)
+                {
+                    return Results.Problem(ex.Message, statusCode: 500);
+                }
+            });
         }
     }
 }

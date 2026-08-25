@@ -27,8 +27,19 @@
 | **📄 CSV Engine** | Bidirektionale robuste CSV-Unterstützung. Konvertieren Sie Text in Sammlungen oder Sammlungen in CSV über `csv(input)`. |
 | **🔍 Intelligente Indizierung** | ASC/DESC Indexe. |
 | **🔗 Joins** | Sammlungen verknüpfen: `db.join(users, orders)`. |
-| **🛡️ Sicher** | Basic Auth (unterstützt SHA256-Hashing) & **Injektionsschutz**. |
+| **🛡️ Sicher** | Basic Auth (unterstützt SHA256-Hashing), **Injektionsschutz** & Schutz reservierter `sys`-Sammlungen. |
 | **🛠️ Hilfsprogramme** | Integrierte Hilfsfunktionen: `md5`, `sha256`, `encrypt`, `random`, `base64`. |
+
+---
+
+## ⚙️ Konfiguration
+
+Servereinstellungen werden in der `sysconfig` Systemkollektion gespeichert. Änderungen an `memoryLimitPercentage`, `bulkStoreMaxCacheBytes`, `maxRecursionDepth`, `queryTimeoutMinutes` und `queuePollIntervalSeconds` werden erst nach einem Neustart wirksam. Sammlungsnamen mit dem Präfix `sys` sind für die interne Infrastruktur reserviert.
+
+```javascript
+// Konfiguration aktualisieren (Neustart erforderlich)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 

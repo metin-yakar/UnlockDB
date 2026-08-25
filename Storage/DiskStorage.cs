@@ -18,6 +18,15 @@ namespace AxarDB.Storage
             _jsonOptions.Converters.Add(new CustomObjectConverter());
         }
 
+        /// <summary>
+        /// Absolute root of the data store (already includes the "Data" segment, e.g.
+        /// bin/Release/net8.0/Data). Index files must be persisted under
+        /// Path.Combine(BasePath, collectionName) so they live next to the collection's
+        /// documents — using a relative "Data" path instead writes them to the wrong
+        /// (working-directory) location and breaks persistence.
+        /// </summary>
+        public string BasePath => _basePath;
+
         public void EnsureCollection(string collectionName)
         {
             var path = Path.Combine(_basePath, collectionName);

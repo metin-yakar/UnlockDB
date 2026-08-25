@@ -79,12 +79,44 @@ namespace AxarDB.Definitions
                      }
                      else if (op == ">")
                      {
-                         return NumericIndex.Where(x => x.Key > num).SelectMany(x => x.Value);
+                         return NumericIndex.Where(x => x.Key > num).SelectMany(x => x.Value).ToList();
                      }
-                      // Implement other ops...
+                     else if (op == ">=")
+                     {
+                         return NumericIndex.Where(x => x.Key >= num).SelectMany(x => x.Value).ToList();
+                     }
+                     else if (op == "<")
+                     {
+                         return NumericIndex.Where(x => x.Key < num).SelectMany(x => x.Value).ToList();
+                     }
+                     else if (op == "<=")
+                     {
+                         return NumericIndex.Where(x => x.Key <= num).SelectMany(x => x.Value).ToList();
+                     }
                  }
              }
              return Enumerable.Empty<string>();
+        }
+
+        public void RemoveDocument(string id, object? value)
+        {
+            if (value is string strVal)
+            {
+                var k = strVal.ToLowerInvariant();
+                if (TextIndex.TryGetValue(k, out var list))
+                {
+                    lock (list) { list.Remove(id); }
+                }
+            }
+            else if (IsNumeric(value))
+            {
+                double num = Convert.ToDouble(value);
+                lock (NumericIndex)
+                {
+                    if (NumericIndex.TryGetValue(num, out var list))
+                        list.Remove(id);
+                }
+            }
         }
 
         private bool IsNumeric(object? expression)

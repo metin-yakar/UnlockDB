@@ -82,7 +82,7 @@ except Exception as e:
 
 ```python
 # Create View
-client.create_view("ActiveUsers", "return db.users.findall(u => u.active).toList()")
+client.create_view("ActiveUsers", "return db.users.findall(u => u.active)")
 
 # Call View
 active_users = client.call_view("ActiveUsers")

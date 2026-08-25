@@ -61,7 +61,7 @@ namespace AxarDB.BackgroundServices
             string jobId = job["_id"]?.ToString() ?? "";
             
             // Mark as started
-            job["executionTime"] = DateTime.UtcNow;
+            job["executionTime"] = ServerTime.Now;
             sysqueue.Update(d => d["_id"].ToString() == jobId, job);
 
             ExecuteJob(job, sysqueue, stoppingToken);
@@ -73,7 +73,7 @@ namespace AxarDB.BackgroundServices
             string template = job["queryTemplate"]?.ToString() ?? "";
             object? parameters = job.ContainsKey("parameters") ? job["parameters"] : null;
             
-            DateTime startTime = DateTime.UtcNow;
+            DateTime startTime = ServerTime.Now;
             
             AxarDB.Logging.Logger.LogDebug($"[Queue] Executing Job {jobId}");
 
@@ -155,7 +155,7 @@ namespace AxarDB.BackgroundServices
                 error = ex.Message;
             }
 
-            DateTime endTime = DateTime.UtcNow;
+            DateTime endTime = ServerTime.Now;
             long durationMs = (long)(endTime - startTime).TotalMilliseconds;
 
             // Update Job Record
@@ -201,7 +201,7 @@ namespace AxarDB.BackgroundServices
                  string path = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "queue_logs");
                  if (!Directory.Exists(path)) Directory.CreateDirectory(path);
                  
-                 File.WriteAllText(Path.Combine(path, $"{jobId}_{DateTime.UtcNow.Ticks}.json"), json, Encoding.UTF8);
+                 File.WriteAllText(Path.Combine(path, $"{jobId}_{ServerTime.Now.Ticks}.json"), json, Encoding.UTF8);
              }
              catch (Exception ex)
              {

@@ -22,11 +22,22 @@
 
 | Característica | Descripción |
 |:---|:---|
-| **📜 Consultas JavaScript** | Sintaxis JS completa: `db.users.findall(x => x.active).toList()`. Soporta nuevas extensiones como `count()` y `distinct()` tanto en ResultSets como en matrices nativas. |
+| **📜 Consultas JavaScript** | Sintaxis JS completa: `db.users.findall(x => x.active)`. Soporta nuevas extensiones como `count()` y `distinct()` tanto en ResultSets como en matrices nativas. |
 | **⚡ Alto Rendimiento** | Almacenamiento en memoria con `ConcurrentDictionary`, evaluación diferida (Lazy Evaluation) vía PLINQ, y límite estricto del 40% de RAM para caché dinámico. |
 | **📄 Motor CSV** | Soporte bidireccional robusto para CSV. Convierta texto a colecciones o colecciones a CSV mediante `csv(input)`. |
-| **🛡️ Seguro** | Autenticación básica (soporta hash SHA256) y **prevención de inyecciones**. |
+| **🛡️ Seguro** | Autenticación básica (soporta hash SHA256), **prevención de inyecciones** y protección de colecciones reservadas con prefijo `sys`. |
 | **🛠️ Utilidades** | Funciones auxiliares integradas: `md5`, `sha256`, `encrypt`, `random`, `base64`. |
+
+---
+
+## ⚙️ Configuración
+
+Los ajustes del servidor se almacenan en la colección de sistema `sysconfig`. Los cambios en `memoryLimitPercentage`, `bulkStoreMaxCacheBytes`, `maxRecursionDepth`, `queryTimeoutMinutes` y `queuePollIntervalSeconds` surten efecto tras reiniciar. Los nombres de colección con prefijo `sys` están reservados para la infraestructura interna.
+
+```javascript
+// Actualizar configuración (requiere reinicio)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 

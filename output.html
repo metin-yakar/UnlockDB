@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>AxarDB Benchmark Report</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; background:#0f172a; color:#e2e8f0; }
+  header { padding: 28px 32px; background: linear-gradient(135deg,#4f46e5,#0ea5e9); }
+  header h1 { margin: 0; font-size: 24px; }
+  header p { margin: 6px 0 0; opacity:.9; }
+  main { padding: 24px 32px; max-width: 1200px; margin: 0 auto; }
+  section { background:#1e293b; border:1px solid #334155; border-radius:12px; padding:20px; margin-bottom:24px; }
+  h2 { font-size:18px; margin-top:0; border-left:4px solid #6366f1; padding-left:10px; }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  th,td { padding:10px 12px; text-align:left; border-bottom:1px solid #334155; }
+  th { color:#94a3b8; font-weight:600; }
+  td.na { color:#64748b; }
+  td.feat-axar { background: rgba(168,85,247,0.18); color:#e9d5ff; font-weight:700; text-align:center; }
+  td.center { text-align:center; }
+  .badge { padding:3px 10px; border-radius:999px; font-size:12px; font-weight:700; }
+  .badge.ok { background:#16a34a; color:#fff; }
+  .badge.err { background:#dc2626; color:#fff; }
+  .chart-box { position:relative; height:380px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  @media(max-width:800px) { .grid2 { grid-template-columns:1fr; } }
+  .muted { color:#94a3b8; font-size:13px; }
+  code { background:#0f172a; padding:2px 6px; border-radius:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AxarDB Benchmark Report</h1>
+  <p>2026-07-11 00:23:49 &bull; Records: 1000 &bull; Engines: AxarDB (db/memory/bulk), PostgreSQL, MariaDB, MongoDB</p>
+</header>
+<main>
+  <section>
+    <h2>Engine Status</h2>
+    <table><thead><tr><th>Engine</th><th>Status</th><th>Description</th></tr></thead>
+    <tbody><tr><td>AxarDB (memory)</td><td><span class="badge ok">ok</span></td><td>-</td></tr><tr><td>AxarDB (db)</td><td><span class="badge ok">ok</span></td><td>-</td></tr><tr><td>AxarDB (bulk)</td><td><span class="badge ok">ok</span></td><td>-</td></tr><tr><td>PostgreSQL</td><td><span class="badge ok">ok</span></td><td>-</td></tr><tr><td>MariaDB</td><td><span class="badge ok">ok</span></td><td>-</td></tr><tr><td>MongoDB</td><td><span class="badge ok">ok</span></td><td>-</td></tr></tbody></table>
+  </section>
+
+  <section>
+    <h2>Operation Times (ms) — lower is better</h2>
+    <table>
+      <thead><tr><th>Operation</th><th>AxarDB (memory)</th><th>AxarDB (db)</th><th>AxarDB (bulk)</th><th>PostgreSQL</th><th>MariaDB</th><th>MongoDB</th></tr></thead>
+      <tbody><tr><td>Setup (DDL)</td><td>0 ms</td><td>0 ms</td><td>0 ms</td><td>15.81 ms</td><td>41.61 ms</td><td>0.29 ms</td></tr><tr><td>Single Insert</td><td>1.00 ms</td><td>2.00 ms</td><td>1.00 ms</td><td>0.22 ms</td><td>2.99 ms</td><td>0.44 ms</td></tr><tr><td>Bulk Insert</td><td>17.00 ms</td><td>948.00 ms</td><td>8.00 ms</td><td>199.14 ms</td><td>13.11 ms</td><td>6.06 ms</td></tr><tr><td>Index Creation</td><td class='na'>-</td><td>12.00 ms</td><td class='na'>-</td><td>6.39 ms</td><td>50.19 ms</td><td>26.58 ms</td></tr><tr><td>Count (COUNT)</td><td>0.05 ms</td><td>4.82 ms</td><td>0.02 ms</td><td>0.45 ms</td><td>0.34 ms</td><td>0.81 ms</td></tr><tr><td>Filter Query</td><td>0.08 ms</td><td>0.22 ms</td><td>0.06 ms</td><td>0.37 ms</td><td>0.47 ms</td><td>0.78 ms</td></tr><tr><td>Range Query</td><td>0.08 ms</td><td>5.28 ms</td><td>0.06 ms</td><td>0.92 ms</td><td>4.49 ms</td><td>1.96 ms</td></tr><tr><td>Aggregation (avg age)</td><td>0.05 ms</td><td>0 ms</td><td>0 ms</td><td>0.36 ms</td><td>0.29 ms</td><td>1.39 ms</td></tr><tr><td>Update</td><td class='na'>-</td><td>175.00 ms</td><td class='na'>-</td><td>1.79 ms</td><td>3.25 ms</td><td>2.05 ms</td></tr><tr><td>Delete</td><td>3.00 ms</td><td>147.00 ms</td><td class='na'>-</td><td>2.43 ms</td><td>4.45 ms</td><td>7.23 ms</td></tr>
+      <tr style="border-top:2px solid #475569"><td><b>Total</b></td><td><b>21.26 ms</b></td><td><b>1294.32 ms</b></td><td><b>9.14 ms</b></td><td><b>227.89 ms</b></td><td><b>121.20 ms</b></td><td><b>47.59 ms</b></td></tr>
+      <tr><td>How many times faster is AxarDB (memory)?</td><td class='na'>-</td><td>60.88x</td><td>0.43x</td><td>10.72x</td><td>5.7x</td><td>2.24x</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Advanced Features Comparison</h2>
+    <p class="muted">AxarDB offers not only performance but also a contrasting architecture. Below are AxarDB-specific
+    capabilities (not found in other engines); cells marked with <b>Yes</b> in the AxarDB column
+    are unique to AxarDB.</p>
+    <table>
+      <thead><tr><th>Feature</th><th>AxarDB</th><th>PostgreSQL</th><th>MariaDB</th><th>MongoDB</th></tr></thead>
+      <tbody><tr><td>JavaScript-based server-side query language</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>Limited</td></tr><tr><td>Built-in task queue (queue / sysqueue)</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>Multiple stores in one system (db / memory / bulk)</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>Native HTTP REST API</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>Embedded mode</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>In-memory store</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>Bulk (chunk) store</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>Schemaless document model</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>Yes</td></tr><tr><td>Built-in authentication (Basic Auth)</td><td class='feat-axar'>Yes</td><td class=''>No</td><td class=''>No</td><td class=''>No</td></tr><tr><td>SQL compatibility</td><td class=''>No</td><td class=''>Yes</td><td class=''>Yes</td><td class=''>No</td></tr></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Per-Operation Comparison (logarithmic scale)</h2>
+    <div class="chart-box"><canvas id="opChart"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Total Time Comparison</h2>
+    <div class="chart-box"><canvas id="totalChart"></canvas></div>
+  </section>
+
+  <section>
+    <h2>How many times faster is AxarDB (memory)?</h2>
+    <div class="chart-box"><canvas id="speedChart"></canvas></div>
+  </section>
+
+  <section>
+    <h2>Test Configuration</h2>
+    <table><tbody><tr><td>AxarDB</td><td>http://localhost:5000 (auth: enabled)</td></tr><tr><td>PostgreSQL</td><td>localhost:5432 (auth: enabled)</td></tr><tr><td>MariaDB</td><td>localhost:3306 (auth: enabled)</td></tr><tr><td>MongoDB</td><td>localhost:27017 (auth: disabled)</td></tr><tr><td>Record count</td><td>1000</td></tr></tbody></table>
+     <p class="muted">Method: Each engine received the same workload (Setup, single/bulk insert, index creation, count,
+     filter, range, aggregation, update, delete). Filter and Range queries ran against the <b>indexed 'age' column</b>.
+     PostgreSQL/MariaDB/MongoDB were measured via native drivers, while AxarDB (db/memory/bulk) was measured through
+     the AxarDB JavaScript query engine. <b>Important:</b> AxarDB times exclude HTTP overhead; operations were sent
+     via <code>queue()</code> and duration was read from <code>sysqueue</code> (server-side Stopwatch), so measured
+     time is pure database processing time. AxarDB uses in-memory storage with async disk persistence, so write times
+     may appear lower compared to synchronous disk writes of native drivers. Read operations were repeated server-side
+     and averaged for sub-millisecond precision. <code>memory</code> and <code>bulk</code> stores lack update/index APIs,
+     so those cells show N/A. Results vary depending on hardware and current load.</p>
+  </section>
+</main>
+<script>
+  const labels = ["Setup (DDL)", "Single Insert", "Bulk Insert", "Index Creation", "Count (COUNT)", "Filter Query", "Range Query", "Aggregation (avg age)", "Update", "Delete"];
+  const datasets = [{"label": "AxarDB (memory)", "data": [0.001, 1.0, 17.0, null, 0.05, 0.08, 0.08, 0.05, null, 3.0], "backgroundColor": "rgba(168,85,247,0.85)"}, {"label": "AxarDB (db)", "data": [0.001, 2.0, 948.0, 12.0, 4.82, 0.22, 5.28, 0.001, 175.0, 147.0], "backgroundColor": "rgba(99,102,241,0.85)"}, {"label": "AxarDB (bulk)", "data": [0.001, 1.0, 8.0, null, 0.02, 0.06, 0.06, 0.001, null, null], "backgroundColor": "rgba(6,182,211,0.85)"}, {"label": "PostgreSQL", "data": [15.80629999989469, 0.22370000078808516, 199.14480000079493, 6.388199999491917, 0.4498999987845309, 0.3670999994938029, 0.9212999993906124, 0.3594999998313142, 1.7922000006365124, 2.4341000007552793], "backgroundColor": "rgba(34,197,94,0.85)"}, {"label": "MariaDB", "data": [41.609399999288144, 2.993899999637506, 13.114699999277946, 50.191000000268104, 0.3405999996175524, 0.46830000064801425, 4.493300000831368, 0.2856999999494292, 3.246600001148181, 4.453500001545763], "backgroundColor": "rgba(234,179,8,0.85)"}, {"label": "MongoDB", "data": [0.2922000003309222, 0.43730000106734224, 6.056500000340748, 26.584899998852052, 0.8117000015772646, 0.7789000010234304, 1.96219999997993, 1.3883999999961816, 2.04689999918628, 7.22940000014205], "backgroundColor": "rgba(244,63,94,0.85)"}];
+  const totals = {"AxarDB (memory)": 0.02126, "AxarDB (db)": 1.29432, "AxarDB (bulk)": 0.00914, "PostgreSQL": 0.22788709999986168, "MariaDB": 0.12119700000221201, "MongoDB": 0.0475884000024962};
+  const speedups = {"AxarDB (db)": 60.88, "AxarDB (bulk)": 0.43, "PostgreSQL": 10.72, "MariaDB": 5.7, "MongoDB": 2.24};
+  const engines = ["AxarDB (memory)", "AxarDB (db)", "AxarDB (bulk)", "PostgreSQL", "MariaDB", "MongoDB"];
+
+  new Chart(document.getElementById('opChart'), {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales: {
+        y: { type:'logarithmic', title:{display:true,text:'Time (ms, log)'}, ticks:{color:'#cbd5e1'}, grid:{color:'#334155'} },
+        x: { ticks:{color:'#cbd5e1'}, grid:{color:'#334155'} }
+      },
+      plugins: { legend:{labels:{color:'#e2e8f0'}} }
+    }
+  });
+
+  new Chart(document.getElementById('totalChart'), {
+    type: 'bar',
+    data: { labels: engines, datasets:[{ label:'Total Time (ms)', data: engines.map(e=>totals[e]!=null?totals[e]*1000:0), backgroundColor: datasets.map(d=>d.backgroundColor) }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales: { y:{ title:{display:true,text:'Time (ms)'}, ticks:{color:'#cbd5e1'}, grid:{color:'#334155'} }, x:{ ticks:{color:'#cbd5e1'}, grid:{color:'#334155'} } },
+      plugins: { legend:{display:false} }
+    }
+  });
+
+  new Chart(document.getElementById('speedChart'), {
+    type: 'bar',
+    data: { labels: engines.filter(e=>e!=="AxarDB (memory)"), datasets:[{ label:"How many times faster is AxarDB (memory)?", data: engines.filter(e=>e!=="AxarDB (memory)").map(e=>speedups[e]||0), backgroundColor:'rgba(14,165,233,0.85)' }] },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      scales: { y:{ title:{display:true,text:'Factor (higher = slower than AxarDB)'}, ticks:{color:'#cbd5e1'}, grid:{color:'#334155'} }, x:{ ticks:{color:'#cbd5e1'}, grid:{color:'#334155'} } },
+      plugins: { legend:{display:false} }
+    }
+  });
+</script>
+</body>
+</html>

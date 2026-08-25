@@ -23,7 +23,7 @@ You can execute raw JavaScript queries just like in the AxarDB shell.
 
 ```csharp
 // Execute a script and get the result
-var users = await client.QueryAsync<List<User>>("db.users.findall().toList()");
+var users = await client.QueryAsync<List<User>>("db.users.findall()");
 
 // Execute a script without return value
 await client.ExecuteAsync("db.users.delete(u => u.isActive == false)");
@@ -38,7 +38,7 @@ var minAge = 18;
 var name = "John";
 
 // The script uses @paramName placeholders
-var script = "db.users.findall(u => u.age >= @minAge && u.name == @name).toList()";
+var script = "db.users.findall(u => u.age >= @minAge && u.name == @name)";
 
 var results = await client.QueryAsync<List<User>>(script, new { minAge, name });
 ```
@@ -84,7 +84,7 @@ The SDK includes a built-in client-side rate limiter. You can configure limits a
        // Check against 'ip_ratelimit' for IP '192.168.1.1' within a '1h' window.
        // The 'condition' parameter (e.g., "warning") is optional.
        var result = await client.QueryWithRateLimitAsync<List<User>>(
-           script: "db.users.findall().toList()", 
+           script: "db.users.findall()", 
            parameters: null, 
            limitKey: "192.168.1.1", 
            limitDuration: "1h", 

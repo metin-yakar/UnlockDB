@@ -33,7 +33,7 @@ namespace AxarDB.Diagnostics
             for (int i=0; i<50000; i++)
             {
                 dicts[i] = new Dictionary<string, object> {
-                    { "_id", Guid.NewGuid().ToString() },
+                    { "_id", AxarDB.Helpers.GuidV7.NewGuid().ToString() },
                     { "id", i },
                     { "name", "Test " + i },
                     { "data", new string('x', 500) } 

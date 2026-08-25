@@ -25,8 +25,19 @@
 | **📜 Query JavaScript** | Sintassi JS completa: `db.users.findall(x => x.active).toList()`. Supporta nuove estensioni come `count()` e `distinct()` sia su ResultSets che su array nativi. |
 | **⚡ Alte Prestazioni** | Archiviazione in-memory con `ConcurrentDictionary`, Lazy Evaluation tramiite PLINQ e limite rigoroso del 40% di RAM per la cache dinamica. |
 | **📄 Motore CSV** | Robusto supporto bidirezionale CSV. Converti testo in collezioni o collezioni in CSV tramite `csv(input)`. |
-| **🛡️ Sicuro** | Basic Auth (supporta hash SHA256) & **Protezione da Injection**. |
+| **🛡️ Sicuro** | Basic Auth (supporta hash SHA256), **Protezione da Injection** & Protezione delle collezioni `sys` riservate. |
 | **🛠️ Utilità** | Funzioni helper integrate: `md5`, `sha256`, `encrypt`, `random`, `base64`. |
+
+---
+
+## ⚙️ Configurazione
+
+Le impostazioni del server sono memorizzate nella collezione di sistema `sysconfig`. Le modifiche a `memoryLimitPercentage`, `bulkStoreMaxCacheBytes`, `maxRecursionDepth`, `queryTimeoutMinutes` e `queuePollIntervalSeconds` hanno effetto dopo il riavvio. I nomi delle collezioni con prefisso `sys` sono riservati per l'infrastruttura interna.
+
+```javascript
+// Aggiornare la configurazione (richiede riavvio)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 

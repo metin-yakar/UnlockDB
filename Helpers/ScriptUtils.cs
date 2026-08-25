@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using AxarDB.Definitions;
 
 namespace AxarDB.Helpers
 {
@@ -168,15 +169,15 @@ namespace AxarDB.Helpers
 
         // --- Date Utilities ---
 
-        private static DateTime ConvertToDateTime(object dateObj)
+        public static DateTime ConvertToDateTime(object dateObj)
         {
-            if (dateObj == null) return DateTime.UtcNow;
+            if (dateObj == null) return ServerTime.Now;
             if (dateObj is DateTime dt) return dt;
             if (dateObj is string s && DateTime.TryParse(s, out var parsed)) return parsed;
             // Handle Jint Date instance if passed as object? 
             // Usually Jint marshals Date to DateTime automatically if typed, but as object it might be different.
             // For now rely on standard conversions.
-            try { return Convert.ToDateTime(dateObj); } catch { return DateTime.UtcNow; }
+            try { return Convert.ToDateTime(dateObj); } catch { return ServerTime.Now; }
         }
 
         public static DateTime AddMinutes(object dateObj, double minutes)

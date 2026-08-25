@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using AxarDB.Definitions;
 
 namespace AxarDB.Metrics
 {
@@ -55,7 +56,7 @@ namespace AxarDB.Metrics
 
         public void RecordRequest(string ip, string method, string path, int statusCode, long durationMs, long reqBytes = 0, long resBytes = 0)
         {
-            var m = new RequestMetric(DateTime.UtcNow, ip, method, path, statusCode, durationMs, reqBytes, resBytes);
+            var m = new RequestMetric(ServerTime.Now, ip, method, path, statusCode, durationMs, reqBytes, resBytes);
             _requests.Enqueue(m);
 
             if (Interlocked.Increment(ref _requestCount) > MaxRequests)
@@ -67,7 +68,7 @@ namespace AxarDB.Metrics
 
         public void RecordScript(string type, string name, long durationMs, bool success, string? error = null)
         {
-            _scripts.Enqueue(new ScriptMetric(DateTime.UtcNow, type, name, durationMs, success, error));
+            _scripts.Enqueue(new ScriptMetric(ServerTime.Now, type, name, durationMs, success, error));
             if (_scripts.Count > MaxScripts) _scripts.TryDequeue(out _);
 
             // Update aggregate
@@ -85,7 +86,7 @@ namespace AxarDB.Metrics
                 Interlocked.Increment(ref agg.CallCount);
                 Interlocked.Add(ref agg.TotalMs, durationMs);
                 if (!success) Interlocked.Increment(ref agg.ErrorCount);
-                agg.LastCalled = DateTime.UtcNow;
+                agg.LastCalled = ServerTime.Now;
 
                 long cur;
                 // MinMs update (spin loop for thread safety without lock)
@@ -98,7 +99,7 @@ namespace AxarDB.Metrics
         {
             var proc = System.Diagnostics.Process.GetCurrentProcess();
             var ramMB = proc.WorkingSet64 / (1024 * 1024);
-            _system.Enqueue(new SystemSample(DateTime.UtcNow, ramMB, 0));
+            _system.Enqueue(new SystemSample(ServerTime.Now, ramMB, 0));
             if (_system.Count > MaxSamples) _system.TryDequeue(out _);
         }
 
@@ -111,7 +112,7 @@ namespace AxarDB.Metrics
             var scripts = _scripts.ToArray();
 
             // Time series: last 60 requests grouped per minute
-            var now = DateTime.UtcNow;
+            var now = ServerTime.Now;
             var timeSeries = Enumerable.Range(0, 60)
                 .Select(i => now.AddMinutes(-59 + i))
                 .Select(t => new

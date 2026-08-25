@@ -22,13 +22,24 @@
 
 | 機能 | 説明 |
 |:---|:---|
-| **📜 JavaScript クエリ** | 完全な JS 構文: `db.users.findall(x => x.active).toList()`。 ResultSet および ネイティブ配列の両方で `count()` や `distinct()` などの新しい拡張機能がサポートされます。 |
+| **📜 JavaScript クエリ** | 完全な JS 構文: `db.users.findall(x => x.active)`。 ResultSet および ネイティブ配列の両方で `count()` や `distinct()` などの新しい拡張機能がサポートされます。 |
 | **⚡ 高パフォーマンス** | `ConcurrentDictionary` を使用したインメモリ ストレージ、PLINQによる遅延評価（Lazy Evaluation）、および厳格な40%のRAMキャッシュ制限。 |
 | **📄 CSV エンジン** | 双方向の堅牢なCSVサポート。 `csv(input)` でテキストをコレクションに、またはコレクションをCSVに変換します。 |
 | **🔍 スマート インデックス** | ASC/DESC インデックス作成。 |
 | **🔗 ジョイン** | コレクション間の結合: `db.join(users, orders)`. |
-| **🛡️ セキュア** | Basic認証 (SHA256ハッシュ対応) と **インジェクション防止**。 |
+| **🛡️ セキュア** | Basic認証 (SHA256ハッシュ対応)、**インジェクション防止**、予約された `sys` プレフィックスコレクションの保護。 |
 | **🛠️ ユーティリティ** | 組み込みヘルパー関数：`md5`、`sha256`、`encrypt`、`random` など。 |
+
+---
+
+## ⚙️ 設定
+
+サーバー設定は `sysconfig` システムコレクションに保存されます。`memoryLimitPercentage`、`bulkStoreMaxCacheBytes`、`maxRecursionDepth`、`queryTimeoutMinutes`、`queuePollIntervalSeconds` の変更は再起動後に反映されます。`sys` プレフィックスを持つコレクション名は内部インフラストラクチャ用に予約されています。
+
+```javascript
+// 設定の更新 (再起動が必要)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 

@@ -7,6 +7,7 @@ using System.Linq;
 using AxarDB.Wrappers;
 using AxarDB.Core;
 using System.Text;
+using AxarDB.Definitions;
 
 namespace AxarDB.Bridges
 {
@@ -27,12 +28,27 @@ namespace AxarDB.Bridges
 
         private IEnumerable<Dictionary<string, object>> LoadLogs()
         {
-            string folderName = _type switch
+            if (_type.Equals("syslogs", StringComparison.OrdinalIgnoreCase) || _type.Equals("all", StringComparison.OrdinalIgnoreCase))
+            {
+                var allLogs = new List<Dictionary<string, object>>();
+                allLogs.AddRange(LoadLogsForType("request"));
+                allLogs.AddRange(LoadLogsForType("error"));
+                allLogs.AddRange(LoadLogsForType("debug"));
+
+                return allLogs.OrderByDescending(l => l.TryGetValue("timestamp", out var ts) ? ts?.ToString() : "");
+            }
+
+            return LoadLogsForType(_type);
+        }
+
+        private IEnumerable<Dictionary<string, object>> LoadLogsForType(string type)
+        {
+            string folderName = type switch
             {
                 "request" => "request_logs",
                 "error" => "error_logs",
                 "debug" => "debug_logs",
-                _ => _type + "_logs"
+                _ => type + "_logs"
             };
 
             var dirPath = Path.Combine(_basePath, folderName);
@@ -44,30 +60,42 @@ namespace AxarDB.Bridges
             var list = new List<Dictionary<string, object>>();
             try
             {
-                var files = Directory.GetFiles(dirPath, "*.txt").OrderBy(f => f);
+                var files = Directory.GetFiles(dirPath, "*.txt").OrderByDescending(f => f);
                 foreach (var file in files)
                 {
                     _cancellationToken.ThrowIfCancellationRequested();
                     var lines = File.ReadAllLines(file, Encoding.UTF8);
-                    foreach (var line in lines)
+                    for (int i = lines.Length - 1; i >= 0; i--)
                     {
+                        var line = lines[i];
                         if (string.IsNullOrWhiteSpace(line)) continue;
                         Dictionary<string, object>? parsed = null;
-                        if (_type == "request")
+                        if (type == "request")
                         {
                             parsed = ParseRequestLogLine(line);
                         }
-                        else if (_type == "error")
+                        else if (type == "error")
                         {
                             parsed = ParseErrorLogLine(line);
                         }
-                        else if (_type == "debug")
+                        else if (type == "debug")
                         {
                             parsed = ParseDebugLogLine(line);
                         }
                         else
                         {
-                            parsed = new Dictionary<string, object> { { "raw", line } };
+                            parsed = new Dictionary<string, object>
+                            {
+                                { "_id", AxarDB.Helpers.GuidV7.NewGuid().ToString() },
+                                { "timestamp", ServerTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff") },
+                                { "type", type },
+                                { "ip", "" },
+                                { "user", "" },
+                                { "query", line },
+                                { "request", line },
+                                { "durationMs", 0L },
+                                { "status", "Info" }
+                            };
                         }
 
                         if (parsed != null)
@@ -83,6 +111,15 @@ namespace AxarDB.Bridges
             }
 
             return list;
+        }
+
+        private static string GenerateLogId(string timestampStr)
+        {
+            if (DateTimeOffset.TryParse(timestampStr, out var dto))
+            {
+                return AxarDB.Helpers.GuidV7.NewGuid(dto).ToString();
+            }
+            return AxarDB.Helpers.GuidV7.NewGuid().ToString();
         }
 
         private Dictionary<string, object>? ParseRequestLogLine(string line)
@@ -122,33 +159,23 @@ namespace AxarDB.Bridges
                 long.TryParse(durationStr, out long durationMs);
 
                 int jsonStart = userEnd + 5;
-                int jsonEnd = durationStart - 5;
+                int jsonEnd = durationStart - 4;
                 string rawJson = "";
-                if (jsonEnd > jsonStart)
+                if (jsonEnd >= jsonStart && jsonEnd <= line.Length)
                 {
                     rawJson = line.Substring(jsonStart, jsonEnd - jsonStart);
                 }
 
-                object? requestData = null;
-                if (!string.IsNullOrEmpty(rawJson))
-                {
-                    try
-                    {
-                        requestData = AxarDB.Helpers.ScriptUtils.SafeDeserializeJson(rawJson);
-                    }
-                    catch
-                    {
-                        requestData = rawJson;
-                    }
-                }
-
                 return new Dictionary<string, object>
                 {
+                    { "_id", GenerateLogId(timestamp) },
                     { "timestamp", timestamp },
+                    { "type", "request" },
                     { "ip", ip },
                     { "user", user },
-                    { "request", requestData ?? rawJson },
-                    { "duration", durationMs },
+                    { "query", rawJson },
+                    { "request", rawJson },
+                    { "durationMs", durationMs },
                     { "status", status }
                 };
             }
@@ -171,8 +198,15 @@ namespace AxarDB.Bridges
 
                 return new Dictionary<string, object>
                 {
+                    { "_id", GenerateLogId(timestamp) },
                     { "timestamp", timestamp },
-                    { "message", message }
+                    { "type", "error" },
+                    { "ip", "" },
+                    { "user", "" },
+                    { "query", message },
+                    { "request", message },
+                    { "durationMs", 0L },
+                    { "status", "Failed: " + message }
                 };
             }
             catch
@@ -196,11 +230,18 @@ namespace AxarDB.Bridges
                 {
                     remainder = remainder.Substring(7).Trim();
                 }
-                
+
                 return new Dictionary<string, object>
                 {
+                    { "_id", GenerateLogId(timestamp) },
                     { "timestamp", timestamp },
-                    { "message", remainder }
+                    { "type", "debug" },
+                    { "ip", "" },
+                    { "user", "" },
+                    { "query", remainder },
+                    { "request", remainder },
+                    { "durationMs", 0L },
+                    { "status", "Debug" }
                 };
             }
             catch
@@ -268,6 +309,12 @@ namespace AxarDB.Bridges
             return firstDoc != null ? new Wrappers.DocumentWrapper(firstDoc) : null;
         }
 
+        public ResultSet take(int count) => findall().take(count);
+
+        public ResultSet skip(int count) => findall().skip(count);
+
+        public List<Dictionary<string, object>> toList() => findall().toList();
+
         public int count(Func<object, bool>? predicate = null)
         {
             if (predicate == null) return LoadLogs().Count();
@@ -281,6 +328,21 @@ namespace AxarDB.Bridges
                 }
             };
             return LoadLogs().Count(safePredicate);
+        }
+
+        public void insert(object doc)
+        {
+            throw new InvalidOperationException("Modification is not allowed on syslogs system collection.");
+        }
+
+        public void update(object updateFields)
+        {
+            throw new InvalidOperationException("Modification is not allowed on syslogs system collection.");
+        }
+
+        public void delete()
+        {
+            throw new InvalidOperationException("Modification is not allowed on syslogs system collection.");
         }
     }
 }

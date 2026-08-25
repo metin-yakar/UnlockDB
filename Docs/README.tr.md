@@ -23,19 +23,19 @@
 
 | Özellik | Açıklama |
 |:---|:---|
-| **📜 JavaScript Sorguları** | Tam JavaScript sözdizimi kullanın: `db.users.findall(x => x.active).toList()`. ResultSet ve Native dizi üzerinde yepyeni `count()` ve `distinct()` uzantılarını destekler. |
+| **📜 JavaScript Sorguları** | Tam JavaScript sözdizimi kullanın: `db.users.findall(x => x.active)`. Uzantıları (`count()`, `distinct()`, `orderBy()`, `orderByDesc()`, `max()`, `min()`) destekler. |
+| **🆔 UUID v7 Desteği** | Varsayılan `_id` düzeni olarak native RFC 9562 UUID v7 kullanılır. Zaman sıralı ID'ler üretir ve `guidv7()`, `guidv7(datetime)`, `guidv7CreatedAt(id)` fonksiyonlarını sunar. |
 | **⚡ Yüksek Performans** | `ConcurrentDictionary`, PLINQ ile Tembel Değerlendirme (Lazy Eval) ve katı %40 RAM kapasite limitli Dinamik Önbellek Yönetimi. |
 | **🧠 Bellek İçi Depo (Memory Store)** | `memory.sessions.insert({...})` ile TTL destekli geçici depolama. Oturum, önbellek ve kısa ömürlü veriler için idealdir. |
 | **📄 CSV Motoru** | İki yönlü, güçlü CSV desteği. `csv(girdi)` fonksiyonu ile metinleri anında nesnelere, nesne listelerini ise CSV dosyalarına çevirin. |
 | **🔍 Akıllı İndeksleme** | Herhangi bir alanda ASC/DESC indeks oluşturun. |
 | **🔗 Join Desteği** | Koleksiyonlar arası güçlü join ve alias (takma ad) desteği. |
 | **📄 Sayfalama (Pagination)** | `skip(n).take(n)` zinciriyle kolayca sayfalama yapın. |
-| **🛡️ Güvenli** | Basic Auth (SHA256 hash desteği ile) ve **Injection Koruması**. |
-| **⏳ Görev Kuyruğu** | `queue("script", params, { priority: 1 })` ile arka plan görevi çalıştırma. `completedAt` zaman damgasıyla tamamlanma takibi sağlar. `db.sysqueue` koleksiyonuna doğrudan ekleme kısıtlanmıştır. |
+| **🛡️ Güvenli** | Basic Auth (SHA256 hash desteği ile), **Injection Koruması** ve `sys` ön ekli özel koleksiyon adlarını engelleyen **Sistem Koleksiyon Koruması**. |
+| **🛡️ Veri Kurtarma** | Olası kazalara karşı `insert`, `update`, `delete`, `drop` gibi durumu değiştiren işlemler için `backup_queries` klasöründe otomatik olarak kurtarma sorguları (fail-safe) üretir. |
 | **🔐 Kasa (Vaults)** | `$KEY` sözdizimi ile API anahtarları için güvenli anahtar-değer depolama. `db.sysvaults` koleksiyonuna doğrudan ekleme kısıtlanmıştır; `addVault()` kullanılmalıdır. |
-| **🐋 Docker Uyumlu** | Tek komutla çalıştırın: `docker run`. |
-| **🛠️ Araçlar** | Dahili yardımcı fonksiyonlar: `md5`, `sha256`, `encrypt`, `random`, `base64`. |
-| **🖥️ Yönetim Paneli** | Monaco Editör, Boyutlandırılabilir Grid ve Koyu Mod içeren Web Arayüzü. |
+| **⏳ Görev Kuyruğu** | `queue("script", params, { priority: 1 })` ile arka plan görevi çalıştırma. `completedAt` zaman damgasıyla tamamlanma takibi sağlar. `db.sysqueue` koleksiyonuna doğrudan ekleme kısıtlanmıştır. |
+| **🖥️ Yönetim Paneli** | Monaco Editör, Sekme Sistemi (Tab), Sorgu Geçmişi, `@param` algılamalı Akıllı View Tıklama, Boyutlandırılabilir Grid ve Koyu Mod içeren Web Arayüzü. |
 
 ---
 
@@ -70,23 +70,37 @@ dotnet run -- -p 5001 --cors "http://localhost:3000"
 
 ## ⚙️ Yapılandırma (Configuration)
 
-AxarDB, `appsettings.json` dosyası üzerinden özelleştirilebilen veya doğrudan başlatma sırasında komut satırı argümanları ile ezilebilen esnek veritabanı ayarlarına sahiptir.
+AxarDB yapılandırma ayarları, veritabanı içindeki `sysconfig` isimli özel bir sistem koleksiyonunda saklanır. İlk kurulum esnasında bu koleksiyon otomatik olarak varsayılan ayarlar ile doldurulur.
+
+Ayarları değiştirmek için yetkili bir kullanıcı `sysconfig` koleksiyonundaki belgeyi güncelleyebilir. Yeni ayarlar veritabanı sunucusu yeniden başlatıldığında aktif olacaktır. `sysconfig` koleksiyonuna doğrudan ekleme (insert) işlemi yapılmasına izin verilmez.
+
+### Sistem Koleksiyon Koruması
+
+`sys` ile başlayan tüm koleksiyon adları **rezerve edilmiştir** ve iç altyapı için kullanılır. Yalnızca ön tanımlı sistem koleksiyonlarına izin verilir: `sysusers`, `sysqueue`, `sysvaults`, `sysconfig` ve `syslogs`. Herhangi bir özel `sys` ön ekli koleksiyon oluşturma veya erişme girişimi (örn. `db.sysnew`) `InvalidOperationException` hatası fırlatır. Bu koruma Bridge, Engine ve Collection katmanlarında uygulanır.
 
 ### Kullanılabilir Parametreler
 
-| Parametre | Konfigürasyon Anahtarı | Varsayılan Değer | Açıklama |
+| Özellik | Tip | Varsayılan Değer | Açıklama |
 | :--- | :--- | :--- | :--- |
-| `--memory-limit` | `DatabaseSettings:MemoryLimitPercentage` | `0.4` | Veritabanının maksimum bellek kullanım oranını belirler (örn: %30 için `0.3`). |
-| `--bulk-cache-limit` | `DatabaseSettings:BulkStoreMaxCacheBytes` | `52428800` (50MB) | Toplu önbellek boyutu limitidir (byte). |
-| `--max-recursion` | `DatabaseSettings:MaxRecursionDepth` | `100` | Çalıştırılan script'lerin maksimum yineleme (recursion) derinliğini sınırlar. |
-| `--query-timeout` | `DatabaseSettings:QueryTimeoutMinutes` | `10` | Sorgu çalışma süresi sınırıdır (dakika). |
-| `--queue-poll-seconds` | `DatabaseSettings:QueuePollIntervalSeconds` | `1.0` | Arka plan kuyruğunun kontrol edilme sıklığıdır (saniye). |
+| `memoryLimitPercentage` | `double` | `0.4` | Veritabanının maksimum bellek kullanım oranını belirler (örn: %30 için `0.3`). |
+| `bulkStoreMaxCacheBytes` | `long` | `52428800` (50MB) | Toplu önbellek boyutu limitidir (byte). |
+| `maxRecursionDepth` | `int` | `100` | Çalıştırılan script'lerin maksimum yineleme (recursion) derinliğini sınırlar. |
+| `queryTimeoutMinutes` | `int` | `10` | Sorgu çalışma süresi sınırıdır (dakika). |
+| `queuePollIntervalSeconds` | `double` | `1.0` | Arka plan kuyruğunun kontrol edilme sıklığıdır (saniye). |
 
 ### Yapılandırma Örneği
-Veritabanı sunucusunu %30 bellek limiti ve 5 dakikalık sorgu zaman aşımı ile başlatmak için:
-```bash
-dotnet run -- --memory-limit 0.3 --query-timeout 5
+Sorgu konsolu üzerinden ayarları değiştirmek için (etkin olması için sunucu yeniden başlatılmalıdır):
+```javascript
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
 ```
+
+---
+
+## 🛡️ Veri Kurtarma (Fail-safe Backup)
+
+AxarDB, verilerinizi kazara kayıplara karşı koruyan hataya dayanıklı (fail-safe) bir veri kurtarma mekanizmasına sahiptir. `db`, `bulk` veya `sys` koleksiyonları üzerinde gerçekleştirilen durumu değiştiren her işlem (`insert`, `update`, `delete`, `drop`, `saveView`, `deleteTrigger` vb.) otomatik olarak bir ters (reverse) sorgu üretir. Örneğin, bir veri ekleme (`insert`) işlemi, bu işlemin geri alınabilmesi için otomatik olarak bir `delete()` sorgusu oluşturur.
+
+Bu kurtarma sorguları günlük bir metin dosyasına (`backup_queries/YYYY-MM-DD.txt`) sıralı olarak eklenir. Yanlışlıkla bir silme veya değiştirme işlemi yapıldığında, bu sorguları çalıştırarak verilerinizi önceki haline döndürebilirsiniz. Bu özellik tamamen fail-safe bir yapı içerisinde sessiz çalışır; diske yazma sırasında bir I/O hatası oluşsa dahi ana veritabanı işleminiz asla kesintiye uğramaz.
 
 ---
 
@@ -153,6 +167,25 @@ var responseWithHeader = httpGet("https://api.example.com/secure", { "Authorizat
 webhook("https://api.example.com/notify", { message: "Hello" });
 ```
 
+### 🧩 Nesne ve Dizi (Array) İşlemleri
+
+**Object.prototype.includes(arr)**
+Bu fonksiyon, bir öğenin belirtilen dizi içerisinde olup olmadığını kontrol eder. C#'taki LINQ `SequenceEqual` veya `Contains` mantığı ile çalışır.
+- Eğer karşılaştırılan nesne tekil bir değerse (örn: int, string), dizinin bu öğeyi içerip içermediğine bakar (`Contains`).
+- Eğer karşılaştırılan nesne de bir diziyse, iki dizinin birebir aynı elemanlara sahip olup olmadığını kontrol eder (`SequenceEqual`).
+
+```javascript
+// 1. Tekil Değer (Contains Mantığı)
+// Bir kaydın rowNumber alanı [66, 69, 74] değerlerinden biri mi?
+var targetCats = [66, 69, 74];
+var myCats = db.categories.findall(x => x.rowNumber != null && x.rowNumber.includes(targetCats));
+
+// 2. Dizi Karşılaştırması (SequenceEqual Mantığı)
+// tags alanı tam olarak ["developer", "senior"] olanları bul
+var targetTags = ["developer", "senior"];
+var matches = db.users.findall(x => x.tags.includes(targetTags));
+```
+
 ---
 
 ## 🧠 Memory Store (Geçici Bellek Deposu)
@@ -169,7 +202,7 @@ memory.sessions.insert({ userId: "abc123", token: "xyz" });
 memory.sessions.insert({ userId: "def456", token: "abc" }, 2.5);
 
 // Tüm kayıtları getir
-var sessions = memory.sessions.findall().toList();
+var sessions = memory.sessions.findall();
 
 // Filtreleyerek getir
 var session = memory.sessions.find(s => s.userId == "abc123");
@@ -192,13 +225,13 @@ memory.sessions.findall(s => s.token == "xyz").delete();
 
 ```javascript
 // 1. sayfa (1-10 arası kayıtlar)
-var page1 = db.users.findall().take(10).toList();
+var page1 = db.users.findall().take(10);
 
 // 2. sayfa (11-20 arası kayıtlar)
-var page2 = db.users.findall().skip(10).take(10).toList();
+var page2 = db.users.findall().skip(10).take(10);
 
 // 3. sayfa (21-30 arası kayıtlar)
-var page3 = db.users.findall().skip(20).take(10).toList();
+var page3 = db.users.findall().skip(20).take(10);
 ```
 
 ---
@@ -206,6 +239,11 @@ var page3 = db.users.findall().skip(20).take(10).toList();
 ## 📦 Bulk Store (JSONL Toplu Veri Deposu)
 
 `bulk` nesnesi, `Bulk/` klasörü içinde JSONL (JSON Lines) formatında tutulan verileri yönetir. Ülke listeleri, posta kodları gibi büyük ama sabit veri setlerinde diski yormadan yüksek hızlı sorgulama yapılması için tasarlanmıştır.
+
+**Temel Özellikler:**
+- **LRU Bellek Önbelleği:** Kayıtları `bulkStoreMaxCacheBytes` limitine kadar önbellekte tutar (varsayılan: 50 MB), en az kullanılan koleksiyonları otomatik temizler.
+- **Bellek Sınırlı Parçalı Sorgulama:** Büyük dosyalarda filtreleme sorguları satır satır işlenir. Her parça için yalnızca predicate'te referans verilen alanlardan geçici hafif indeks oluşturulur, bellek kullanımı `bulkStoreMaxCacheBytes` ile sınırlı tutulur.
+- **Otomatik Yenileme:** FileSystemWatcher disk değişikliklerini algılar ve önbelleği otomatik yeniler.
 
 > `bulk` nesnesi `db` ve `memory` gibi doğrudan (top-level) kullanılır.
 
@@ -217,13 +255,45 @@ bulk.countries.insert([
 ]);
 
 // Tüm verileri çek
-var list = bulk.countries.findall().toList();
+var list = bulk.countries.findall();
 
 // Belirli bir kaydı bul
 var tr = bulk.countries.find(c => c.code == "TR");
 
+// Büyük/küçük harf duyarsız alt string araması (AxarDB özel String.prototype.contains)
+var esenYerler = bulk.postalcodes.findall(x => x.placeName.contains("esen"));
+
+// Büyük/küçük harf duyarsız ön ek kontrolü (AxarDB özel String.prototype.startsWith)
+var istanbulKodlari = bulk.postalcodes.findall(x => x.placeName.startsWith("istan"));
+
+// Dizi (Array) içinde öğe arama (C# LINQ SequenceEqual / Contains benzeri)
+var targetCats = [66, 69, 74];
+var myCats = bulk.categories.findall(x => x.rowNumber.includes(targetCats));
+
 // Önbelleği manuel yenile
 bulk.reload("countries");
+```
+
+---
+
+## 🆔 UUID v7 Desteği
+
+AxarDB, varsayılan birincil anahtar (`_id`) üretim şeması olarak native **RFC 9562** uyumlu UUID v7'yi kullanır. Bu sayede üretilen tüm ID'ler zamana göre sıralı (time-sortable) olur, indeks ve disk arama performansını artırır. Geriye dönük uyumluluk korunarak eski v4 GUID anahtarlarıyla aynı koleksiyonda sorunsuz çalışabilir.
+
+### Global Sorgu Fonksiyonları:
+- `guidv7()`: Mevcut UTC zamanıyla yeni bir UUID v7 üretir.
+- `guidv7(datetime)`: Belirtilen ISO 8601 tarih damgasıyla UUID v7 üretir.
+- `guidv7CreatedAt(guid)`: v7 GUID dizesinden oluşturulma tarihini UTC `DateTime` olarak çıkarır.
+- `guid()`: Standart UUID v4 üretir (geriye dönük uyumluluk için korunmuştur).
+
+### Örnek Kullanım:
+```javascript
+// Sorgu içerisinde kaydın oluşturulma tarihini çekme
+var urun = db.products.find(p => p.name == "Super Phone 0");
+if (urun) {
+    var olusturulmaTarihi = guidv7CreatedAt(urun._id);
+    console.log("Ürün oluşturulma zamanı: " + olusturulmaTarihi);
+}
 ```
 
 ---
@@ -303,7 +373,7 @@ C# ve yazılım mimarisi üzerine **2011'den bu güne** tecrübesiyle Metin, yü
 **C# Örneği:**
 ```csharp
 // View oluşturulur
-await client.CreateViewAsync("myview", "db.users.findall(x => x.age > @minAge).toList()");
+await client.CreateViewAsync("myview", "db.users.findall(x => x.age > @minAge)");
 
 // View parametre ile çağrılır
 var users = await client.CallViewAsync<User[]>("myview", new { minAge = 18 });
@@ -312,7 +382,7 @@ var users = await client.CallViewAsync<User[]>("myview", new { minAge = 18 });
 **Python Örneği:**
 ```python
 # View oluşturulur
-client.create_view("myview", "db.users.findall(x => x.age > @minAge).toList()")
+client.create_view("myview", "db.users.findall(x => x.age > @minAge)")
 
 # View parametre ile çağrılır
 users = client.call_view("myview", { "minAge": 18 })

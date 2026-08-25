@@ -311,6 +311,21 @@ body {
     opacity: 1;
 }
 
+.resizer-json {
+    width: 6px;
+    cursor: col-resize;
+    background: var(--border);
+    transition: background 0.2s;
+    flex-shrink: 0;
+    z-index: 100;
+    height: 100%;
+}
+
+.resizer-json:hover,
+.resizer-json.active {
+    background: var(--accent);
+}
+
 /* Row Action Buttons */
 .row-action-btn {
     width: 28px;
@@ -932,4 +947,23 @@ input[type="checkbox"]:checked::after {
 
 .history-list .empty-state i {
     opacity: 0.3;
+}
+
+/* Sysconfig Warning Banner */
+.sysconfig-banner {
+    background: rgba(99, 102, 241, 0.08);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-left: 4px solid var(--accent);
+    padding: 0.5rem 1rem;
+    margin: 0.5rem 1rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+    display: none;
+    align-items: center;
+    gap: 0.5rem;
+    color: var(--text-secondary);
+}
+
+.sysconfig-banner strong {
+    color: var(--text-primary);
 }

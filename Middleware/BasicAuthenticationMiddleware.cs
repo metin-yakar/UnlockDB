@@ -29,6 +29,7 @@ namespace AxarDB.Middleware
                 {
                     if (_dbEngine.Authenticate(username, password))
                     {
+                        AxarDB.Core.BackupQuery.CurrentUser.Value = username;
                         await _next(context);
                         return;
                     }

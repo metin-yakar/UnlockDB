@@ -19,7 +19,94 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Remove="Update\debian\axardb-update.service" />
+    <None Remove="Update\debian\axardb-update.timer" />
+    <None Remove="Update\debian\README.md" />
+    <None Remove="Update\debian\schedule-cron.sh" />
+    <None Remove="Update\debian\update.sh" />
+    <None Remove="Update\docker\README.md" />
+    <None Remove="Update\docker\schedule-cron.sh" />
+    <None Remove="Update\docker\schedule-task.ps1" />
+    <None Remove="Update\docker\update.ps1" />
+    <None Remove="Update\docker\update.sh" />
+    <None Remove="Update\README.md" />
+    <None Remove="Update\ubuntu\axardb-update.service" />
+    <None Remove="Update\ubuntu\axardb-update.timer" />
+    <None Remove="Update\ubuntu\README.md" />
+    <None Remove="Update\ubuntu\schedule-cron.sh" />
+    <None Remove="Update\ubuntu\update.sh" />
+    <None Remove="Update\windows\README.md" />
+    <None Remove="Update\windows\schedule-task.ps1" />
+    <None Remove="Update\windows\update.bat" />
+    <None Remove="Update\windows\update.ps1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="Update\debian\axardb-update.service">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\debian\axardb-update.timer">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\debian\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\debian\schedule-cron.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\debian\update.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\docker\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\docker\schedule-cron.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\docker\schedule-task.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\docker\update.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\docker\update.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\ubuntu\axardb-update.service">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\ubuntu\axardb-update.timer">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\ubuntu\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\ubuntu\schedule-cron.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\ubuntu\update.sh">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\windows\README.md">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\windows\schedule-task.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\windows\update.bat">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="Update\windows\update.ps1">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Jint" Version="4.4.2" />
+    <PackageReference Include="Acornima" Version="1.2.0" />
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="10.0.2" />
     <PackageReference Include="MySqlConnector" Version="2.3.5" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -27,12 +114,12 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="wwwroot\unlockerdbLogo.png">
+    <Content Update="wwwroot\unlockerdbLogo.png">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="appsettings.json">
+    </Content>
+    <Content Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    </Content>
   </ItemGroup>
 
   <ItemGroup>

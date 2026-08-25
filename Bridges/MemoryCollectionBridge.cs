@@ -1,6 +1,7 @@
 using Jint;
 using Jint.Native;
 using AxarDB.Wrappers;
+using System.Diagnostics;
 
 namespace AxarDB.Bridges
 {
@@ -10,6 +11,12 @@ namespace AxarDB.Bridges
     /// </summary>
     public class MemoryCollectionBridge
     {
+        private static readonly bool Diag = Environment.GetEnvironmentVariable("AXARDB_DIAG") == "1";
+        private static void Log(string step, string detail, long ms)
+        {
+            if (Diag) Console.WriteLine($"[diag:memory-bridge] {step} | {detail} | {ms} ms");
+        }
+
         private readonly MemoryStore _store;
         private readonly string _collectionName;
         private readonly Engine? _engine;
@@ -24,16 +31,41 @@ namespace AxarDB.Bridges
         }
 
         /// <summary>
-        /// Insert a document into the in-memory collection.
+        /// Insert a document (or a batch of documents) into the in-memory collection.
+        /// Accepts either a single JavaScript object or an array/list of objects;
+        /// arrays are inserted in a single store call to avoid per-document bridge overhead.
         /// </summary>
-        /// <param name="docObj">JavaScript object to insert.</param>
+        /// <param name="docsObj">JavaScript object, or array/list of objects, to insert.</param>
         /// <param name="hours">TTL in hours. Defaults to 1 hour if not provided.</param>
-        public object? insert(object docObj, double hours = 1.0)
+        public object? insert(object docsObj, double hours = 1.0)
         {
-            var dict = ConvertToDictionary(docObj);
-            if (dict == null) return null;
+            if (docsObj is IEnumerable<object> enumerable && !(docsObj is string))
+            {
+                var list = new List<Dictionary<string, object>>();
+                var skipped = 0;
+                foreach (var item in enumerable)
+                {
+                    var dict = ConvertToDictionary(item);
+                    if (dict != null) list.Add(dict);
+                    else skipped++;
+                }
+                if (skipped > 0) Log("insert", $"SKIPPED {skipped} docs (could not convert to Dictionary)", 0);
+                if (list.Count == 0) return 0;
+                var swBatch = Stopwatch.StartNew();
+                var resBatch = _store.Insert(_collectionName, list, hours);
+                swBatch.Stop();
+                Log("insert(batch)", $"{_collectionName} docs={list.Count}", swBatch.ElapsedMilliseconds);
+                return resBatch;
+            }
 
-            return _store.Insert(_collectionName, dict, hours);
+            var single = ConvertToDictionary(docsObj);
+            if (single == null) return null;
+
+            var swSingle = Stopwatch.StartNew();
+            var resSingle = _store.Insert(_collectionName, single, hours);
+            swSingle.Stop();
+            Log("insert(single)", _collectionName, swSingle.ElapsedMilliseconds);
+            return resSingle;
         }
 
         /// <summary>
@@ -41,13 +73,33 @@ namespace AxarDB.Bridges
         /// </summary>
         public MemoryResultSet findall(JsValue? predicate = null)
         {
+            var sw = Stopwatch.StartNew();
             var all = _store.FindAll(_collectionName);
+            var storeMs = sw.ElapsedMilliseconds;
 
             if (predicate == null || predicate.IsNull() || predicate.IsUndefined())
             {
+                Log("findall(all)", $"{_collectionName} docs={all.Count()}", storeMs);
                 return new MemoryResultSet(all, _store, _collectionName);
             }
 
+            // Optimize simple queries
+            var optimized = AxarDB.Query.QueryOptimizer.AnalyzePredicate(predicate);
+            if (optimized != null)
+            {
+                var analysis = new AxarDB.Query.QueryOptimizer.AnalysisResult
+                {
+                    Prop = optimized.Value.prop!,
+                    Val = optimized.Value.val!,
+                    Op = optimized.Value.op
+                };
+
+                var filtered = all.Where(d => AxarDB.Query.QueryOptimizer.Evaluate(d, analysis)).ToList();
+                Log("findall(fast)", $"{_collectionName} prop={analysis.Prop} op={analysis.Op} matched={filtered.Count}", storeMs);
+                return new MemoryResultSet(filtered, _store, _collectionName);
+            }
+
+            Log("findall(SLOW-js)", $"{_collectionName} predicate='{predicate.ToString().Replace("\n", " ")}' docs={all.Count()}", storeMs);
             Func<Dictionary<string, object>, bool> csPredicate = (d) =>
             {
                 if (_engine == null) return true;
@@ -62,7 +114,15 @@ namespace AxarDB.Bridges
                 }
             };
 
-            return new MemoryResultSet(all.Where(csPredicate), _store, _collectionName);
+            return new MemoryResultSet(all.Where(csPredicate).ToList(), _store, _collectionName);
+        }
+
+        /// <summary>
+        /// Returns the count of all active documents in this collection.
+        /// </summary>
+        public int count()
+        {
+            return _store.GetRecordCount(_collectionName);
         }
 
         /// <summary>
@@ -81,6 +141,12 @@ namespace AxarDB.Bridges
 
             var doc = _store.FindAll(_collectionName).FirstOrDefault(safePredicate);
             return doc != null ? new DocumentWrapper(doc) : null;
+        }
+
+        public void update(JsValue predicate, object updateFields)
+        {
+            var resultSet = findall(predicate);
+            resultSet.update(updateFields);
         }
 
         public MemoryResultSet contains(Func<object, bool> predicate)
@@ -113,13 +179,14 @@ namespace AxarDB.Bridges
 
         /// <summary>
         /// Deletes documents matching the predicate from the in-memory collection.
+        /// When called without arguments, drops the entire collection from the store.
         /// </summary>
         public void delete(JsValue? predicate = null)
         {
             if (predicate == null || predicate.IsNull() || predicate.IsUndefined())
             {
-                // Delete all
-                _store.Delete(_collectionName, _ => true);
+                // Drop the whole collection so it disappears from memory/list
+                _store.DropCollection(_collectionName);
                 return;
             }
 

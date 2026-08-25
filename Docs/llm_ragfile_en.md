@@ -2,7 +2,7 @@
 
 This file teaches AI models how to use AxarDB correctly. AxarDB is an **in-memory NoSQL database** that runs on ASP.NET Core. It uses **JavaScript** for all queries, powered by the Jint engine.
 
-> **CRITICAL**: Read each section carefully. Follow the exact syntax shown. Incorrect usage (e.g., missing `.toList()`) will cause errors.
+> **CRITICAL**: Read each section carefully. Follow the exact syntax shown.
 
 ## 1. Core Concept
 
@@ -32,25 +32,26 @@ db.products.insert({ name: "Laptop", price: 999.99, inStock: true });
 
 ### B. Find Data (Reading)
 
-#### `findall()` — Returns a ResultSet (NOT an array)
-> **CRITICAL RULE**: `findall()` returns a `ResultSet`, **NOT** an array. You **MUST** call `.toList()` or `.ToList()` to convert it to an array. Both casing variants work.
+#### `findall()` — Returns a ResultSet (fully chainable and iterable)
+> **NOTE**: `findall()` returns a `ResultSet`, which represents the query result. While it is fully chainable and can be iterated directly in JS loops, you can optionally call `.toList()` or `.ToList()` to convert it to a standard JavaScript array if needed. Both casing variants work.
 
 ```javascript
 // ✅ CORRECT — Get all users as array
-var list = db.users.findall().toList();
+var list = db.users.findall();
 
 // ✅ CORRECT — Filter with predicate
-var adults = db.users.findall(u => u.age > 18).toList();
+var adults = db.users.findall(u => u.age > 18);
 
 // ✅ CORRECT — Case variants both work
-var items = db.orders.findall().ToList();
+var items = db.orders.findall();
 
-// ❌ WRONG — Returns ResultSet, not array!
-var broken = db.users.findall();
-// broken is NOT iterable as an array
+// ✅ VALID — Returns ResultSet
+var resultSet = db.users.findall();
+// resultSet supports chaining (.take(5), .skip(5), .select(x => x.name), .delete(), .update())
+// and is fully iterable in JS (e.g. for (var x of resultSet))
 ```
 
-#### `find()` — Returns one item (no `.toList()` needed)
+#### `find()` — Returns one item
 ```javascript
 // Find first user matching condition
 var admin = db.users.find(u => u.isAdmin == true);
@@ -65,8 +66,8 @@ if (user) {
 #### Boolean Filtering
 Booleans are compared with `== true` or `== false`:
 ```javascript
-var premiums = db.users.findall(u => u.isPremium == true).toList();
-var freeUsers = db.users.findall(u => u.isPremium == false).toList();
+var premiums = db.users.findall(u => u.isPremium == true);
+var freeUsers = db.users.findall(u => u.isPremium == false);
 ```
 
 ### C. Update Data
@@ -90,17 +91,21 @@ db.orders.findall(u => u._id == "order_123").delete();
 
 ## 3. ResultSet Chain Methods
 
-After `findall()`, you can chain these methods **before** `.toList()`:
+After `findall()`, you can chain these methods:
 
 | Method | Description | Example |
 |:---|:---|:---|
-| `.toList()` / `.ToList()` | **Required** — Convert ResultSet to array | `findall().toList()` |
-| `.take(n)` | Limit results to first N items | `findall().take(5).toList()` |
-| `.skip(n)` | Skip the first N items | `findall().skip(10).toList()` |
-| `.select(fn)` | Project/transform each document | `findall().select(u => u.name).toList()` |
+| `.toList()` / `.ToList()` | **Optional** — Convert ResultSet to array | `findall().toList()` |
+| `.take(n)` | Limit results to first N items | `findall().take(5)` |
+| `.skip(n)` | Skip the first N items | `findall().skip(10)` |
+| `.select(fn)` | Project/transform each document | `findall().select(u => u.name)` |
+| `.orderBy(fn)` | Order results ascending | `findall().orderBy(u => u.age)` |
+| `.orderByDesc(fn)` | Order results descending | `findall().orderByDesc(u => u.age)` |
+| `.max(selector)` | Get maximum value of a field | `findall().max(u => u.age)` |
+| `.min(selector)` | Get minimum value of a field | `findall().min(u => u.age)` |
 | `.count(predicate?)` | Get total count or conditionally count matches | `findall().count(x => x.age > 18)` |
-| `.distinct(selector?)`| Get a list of unique values or objects | `findall().distinct(x => x.role).toList()` |
-| `.first()` | Get first matching item (no `.toList()`) | `findall().first()` |
+| `.distinct(selector?)`| Get a list of unique values or objects | `findall().distinct(x => x.role)` |
+| `.first()` | Get first matching item | `findall().first()` |
 | `.foreach(fn)` | Execute callback for each item | `findall().foreach(u => console.log(u.name))` |
 | `.update(obj)` | Update all matching records | `findall(u => u.old == true).update({old: false})` |
 | `.delete()` | Delete all matching records | `findall(u => u.expired == true).delete()` |
@@ -111,7 +116,7 @@ After `findall()`, you can chain these methods **before** `.toList()`:
 var top5 = db.products.findall(p => p.price > 1000)
                       .take(5)
                       .select(p => p.name)
-                      .toList();
+                      ;
 
 // Count active users
 var count = db.users.findall(u => u.active == true).count();
@@ -126,10 +131,114 @@ db.users.findall().foreach(u => {
 ```
 
 ### Case-Insensitive Search
-Use `contains()` for fuzzy matching:
+
+AxarDB provides **two distinct** mechanisms for case-insensitive operations. They serve different purposes and must not be confused:
+
+#### 1. Collection-Level `db.collection.contains(predicate)` — Exact Match
+Uses a `CaseInsensitiveDocumentWrapper` so that **property access** on documents is case-insensitive. Performs exact equality comparisons:
 ```javascript
 var devs = db.users.contains(x => x.title == "developer");
-// Matches "Developer", "DEVELOPER", "developer", etc.
+// Matches "Developer", "DEVELOPER", "developer" — exact equality, case-insensitive property access
+```
+
+#### 2. String Prototype `.contains(str)` — Substring Search (Case-Insensitive)
+AxarDB injects a custom `String.prototype.contains()` method into every script execution. This performs **case-insensitive substring** matching on any string field:
+```javascript
+// Substring search inside a predicate
+var results = bulk.postalcodes.findall(x => x.placeName.contains("esen"));
+// Matches "Esenler", "ESENYURT", "Büyükçekmece" — any placeName containing "esen" (case-insensitive)
+
+// Also works in any JavaScript string context
+var found = "İstanbul".contains("istan"); // true
+```
+
+> **CRITICAL**: Standard JavaScript does **not** have `String.prototype.contains()`. AxarDB injects this method for convenience. It wraps `String.prototype.includes()` with case-insensitive behavior and Turkish character normalization. For case-sensitive substring search, use the standard `.includes()` method.
+
+### Built-in JavaScript Prototype Extensions
+
+AxarDB injects several methods into JavaScript's built-in prototypes on **every script execution**. These are available in all predicates, views, triggers, and any JavaScript context within AxarDB. They are **not** standard JavaScript — they are AxarDB-specific additions.
+
+#### String Prototype Extensions
+
+| Method | Description | Example |
+|:---|:---|:---|
+| `.contains(str)` | **Case-insensitive** substring search. Handles Turkish characters correctly. Returns `boolean`. | `"İstanbul".contains("istan")` → `true` |
+| `.startsWith(str)` | **Case-insensitive** prefix check. Handles Turkish characters correctly. Returns `boolean`. | `"İstanbul".startsWith("ist")` → `true` |
+| `.toLowerCase()` | **Turkish-aware** lowercase. Normalizes `İ→i`, `I→i`, `Ö→ö`, `Ü→ü`, `Ç→ç`, `Ş→ş`, `Ğ→ğ`. Overrides the standard `.toLowerCase()`. | `"İZMİR".toLowerCase()` → `"izmir"` |
+
+> **IMPORTANT**: AxarDB's `.contains()` and `.startsWith()` override the standard JavaScript behavior. The standard `.includes()` is case-sensitive; AxarDB's `.contains()` is case-insensitive. The standard `.startsWith()` is case-sensitive; AxarDB's override is not. The standard `.toLowerCase()` does not handle Turkish characters correctly; AxarDB's override does.
+
+**Usage in predicates:**
+```javascript
+// Substring search inside a findall predicate
+var gmailUsers = db.users.findall(u => u.email.contains("gmail"));
+
+// Bulk store substring search
+var matches = bulk.products.findall(p => p.name.contains("phone"));
+
+// Prefix check (case-insensitive)
+var adminEmails = db.users.findall(u => u.email.startsWith("admin"));
+
+// Turkish character handling
+var city = "İZMİR".toLowerCase(); // "izmir" (not "İzmİr" as standard JS would produce)
+var found = city.contains("iz");  // true
+```
+
+#### UUID v7 Functions
+
+AxarDB uses UUID v7 as its default `_id` generation scheme for all collections (Standard, Memory, and Bulk). It also exposes query utility functions to generate or extract metadata from UUID v7.
+
+| Function | Description | Example |
+|:---|:---|:---|
+| `guidv7()` | Generates a new UUID v7 using the current UTC time. Returns `string`. | `guidv7()` → `"019853ab-1c2d-7e4f-..."` |
+| `guidv7(datetime)` | Generates a new UUID v7 using the specified ISO 8601 datetime string. Returns `string`. | `guidv7("2024-01-15T10:30:00Z")` |
+| `guidv7CreatedAt(guidStr)` | Extracts the UTC creation timestamp from a UUID v7 string. Returns `Date` (or `null` if invalid/not v7). | `guidv7CreatedAt("019853ab-...")` |
+| `guid()` | Generates a standard UUID v4. (Maintained for backward compatibility). Returns `string`. | `guid()` |
+
+**Usage examples:**
+```javascript
+// Insert with explicit UUID v7 using a custom date
+db.history.insert({
+    _id: guidv7("2023-05-10T14:20:00Z"),
+    event: "Legacy Import"
+});
+
+// Extract creation date from a document's ID
+var doc = db.users.find(u => u.name == "John");
+if (doc && doc._id) {
+    var createdTime = guidv7CreatedAt(doc._id);
+    console.log("Document was created at: " + createdTime);
+}
+```
+
+#### Array Prototype Extensions
+
+These methods are available on **any JavaScript array**:
+
+| Method | Description | Example |
+|:---|:---|:---|
+| `.count(predicate?)` | Count elements. Without argument returns `array.length`. With predicate, counts matching elements. | `arr.count(x => x.age > 18)` |
+| `.distinct(selector?)` | Return array of unique values. Optional selector transforms before deduplication. | `arr.distinct(x => x.role)` |
+| `.toList()` | Identity method, returns the array itself (for API consistency with ResultSet). | `[1,2].toList()` → `[1,2]` |
+
+#### Object Prototype Extension
+
+| Method | Description |
+|:---|:---|
+| `.toList()` | Converts iterable objects (ResultSets, .NET enumerables) to plain JavaScript arrays. |
+| `.includes(arr)` | Checks if the object is contained in the specified array. If the object itself is an array, it performs a strict equality check (like C# LINQ `SequenceEqual`). Example: `x.rowNumber.includes([66,69,74])` |
+
+**Usage examples for `.includes(arr)`:**
+```javascript
+// 1. Single Value Check (Similar to LINQ Contains)
+// Check if a document's rowNumber is one of [66, 69, 74]
+var targetCats = [66, 69, 74];
+var myCats = db.categories.findall(x => x.rowNumber != null && x.rowNumber.includes(targetCats));
+
+// 2. Array Comparison (Similar to LINQ SequenceEqual)
+// Find users where tags exactly match ["developer", "senior"]
+var targetTags = ["developer", "senior"];
+var matches = db.users.findall(x => x.tags.includes(targetTags));
 ```
 
 ## 4. Join Operations
@@ -153,7 +262,7 @@ var result = db.join(
     item: x.product.name,
     date: x.order.createdAt
 }))
-.toList();
+;
 ```
 
 ### B. Default Indexed Joins
@@ -162,7 +271,7 @@ If aliases are not provided, sources are indexed as `j1`, `j2`, `j3`, etc., base
 // j1 = users, j2 = orders
 var result = db.join(db.users, db.orders)
     .where(x => x.j1._id == x.j2.userId)
-    .toList();
+    ;
 ```
 
 ### C. Joining Arrays/Parameters
@@ -171,7 +280,7 @@ You can join literal arrays or objects passed as parameters:
 // order.items is an array inside the view
 return db.join(alias(order.items, "item"), alias(db.products, "prod"))
     .where(x => x.item.productId == x.prod._id)
-    .toList();
+    ;
 ```
 
 ## 5. Index Creation
@@ -206,19 +315,19 @@ db.saveView("getUsersByAge", `
 // @access public
 var minAge = @minAge;
 var maxAge = @maxAge;
-return db.users.findall(u => u.age >= minAge && u.age <= maxAge).toList();
+return db.users.findall(u => u.age >= minAge && u.age <= maxAge);
 `);
 
 // Create a public view WITHOUT parameters
 db.saveView("activeUsers", `
 // @access public
-return db.users.findall(u => u.active == true).toList();
+return db.users.findall(u => u.active == true);
 `);
 
 // Create a private view
 db.saveView("internalReport", `
 // @access private
-return db.orders.findall().toList();
+return db.orders.findall();
 `);
 ```
 
@@ -411,10 +520,10 @@ memory.cache.insert({ key: "homepage", html: "<h1>Hi</h1>" }, 0.5);
 ### Find Data
 ```javascript
 // Get all entries from memory collection
-var sessions = memory.sessions.findall().toList();
+var sessions = memory.sessions.findall();
 
 // Filter with a predicate
-var active = memory.sessions.findall(s => s.active == true).toList();
+var active = memory.sessions.findall(s => s.active == true);
 
 // Find a single entry
 var session = memory.sessions.find(s => s.userId == "abc");
@@ -447,7 +556,7 @@ The `bulk` object manages collections of data serialized in the JSONL (JSON Line
 
 ### Bulk Operations
 - **Bulk Insert / Initialize**: `bulk.countries.insert([...ArrayOfObjects])`
-- **Bulk Retrieve**: `bulk.countries.findall().toList()`
+- **Bulk Retrieve**: `bulk.countries.findall()`
 - **Bulk Find**: `bulk.countries.find(c => c.code == "TR")`
 - **Bulk Delete**: `bulk.countries.findall(c => c.code == "US").delete()`
 - **Bulk Count**: `bulk.countries.count()`
@@ -461,7 +570,13 @@ bulk.countries.insert([
 ]);
 
 // Querying bulk
-var european = bulk.countries.findall(c => c.population > 80000000).toList();
+var european = bulk.countries.findall(c => c.population > 80000000);
+
+// Substring search (case-insensitive via String.prototype.contains)
+var esenDistricts = bulk.postalcodes.findall(x => x.placeName.contains("esen"));
+
+// Prefix check (case-insensitive via String.prototype.startsWith)
+var istanbulCodes = bulk.postalcodes.findall(x => x.placeName.startsWith("istan"));
 ```
 
 ## 13. Queue Operations (Background Jobs)
@@ -554,8 +669,50 @@ Execution logs are stored in `queue_logs/` directory.
 To prevent unauthorized modification of core database operations, direct insertions via standard insert queries (e.g. `db.collection.insert(...)`) are strictly prohibited on the following collections:
 *   `db.sysqueue`: Insertion must go through the global `queue()` function.
 *   `db.sysvaults`: Insertion/updates must go through the `addVault()` / `db.addVault()` function.
+*   `db.syslogs`: Read-only virtual collection for querying request, error, and debug logs. Direct insertion or modification is prohibited.
 
-Attempting a direct insert on these system collections will throw an `InvalidOperationException`.
+Attempting a direct insert or update on these system collections will throw an `InvalidOperationException`.
+
+### System Log Querying (`db.syslogs` for AI Models & Agents)
+
+> 🤖 **FOR AI MODELS & AGENTS**: When you need to investigate server execution history, diagnose runtime errors, audit past queries, track deleted/modified records, or inspect system performance, **ALWAYS query `db.syslogs`**. Do not search log files on disk manually when a database script query can answer it instantly.
+
+`db.syslogs` is a virtual, read-only collection that aggregates system request logs, error logs, and debug logs. It parses raw log files on demand into structured JSON documents with UUID v7 IDs (`_id`), so queries return results ordered with the newest logs first.
+
+#### Record Schema
+Each log record in `db.syslogs` contains the following fields:
+* `_id`: String (UUID v7, time-ordered)
+* `timestamp`: String (Format: `YYYY-MM-DD HH:mm:ss.fff`)
+* `type`: String (`"request"`, `"error"`, or `"debug"`)
+* `ip`: String (Client IP address)
+* `user`: String (Authenticated username)
+* `query`: String (Executed script payload, error message, or debug log)
+* `durationMs`: Number (Execution time in milliseconds)
+* `status`: String (`"Success"`, `"Failed: <message>"`, `"Error"`, or `"Debug"`)
+
+#### Practical AI Query Examples
+
+```javascript
+// 1. Get recent 50 system logs (newest first)
+db.syslogs.take(50);
+
+// 2. Search for queries referencing a specific collection or keyword (e.g. "sysvaults" or "delete")
+db.syslogs.findall(l => l.query.contains("sysvaults")).take(20);
+
+// 3. Find all failed request executions or error logs
+db.syslogs.findall(l => l.type == "error" || l.status.startsWith("Failed"));
+
+// 4. Inspect slow queries taking longer than 100ms
+db.syslogs.findall(l => l.durationMs > 100).take(20);
+
+// 5. Audit queries executed by a specific user
+db.syslogs.findall(l => l.user == "unlocker" && l.type == "request").take(20);
+
+// 6. Count total logged request entries
+db.syslogs.count(l => l.type == "request");
+```
+
+> **NOTE**: `db.syslogs` is strictly read-only. Calling `.insert()`, `.update()`, or `.delete()` will throw an `InvalidOperationException`.
 
 ### Authentication
 *   **Method**: HTTP Basic Auth
@@ -606,12 +763,12 @@ AxarDB blocks dangerous patterns: `eval()`, `Function()`, `<script>` tags, and o
 # Execute a query
 curl -X POST "http://localhost:5000/query" \
      -u "unlocker:unlocker" \
-     -d "db.users.findall().toList()"
+     -d "db.users.findall()"
 
 # Query with safe parameters
 curl -X POST "http://localhost:5000/query?ageLimit=20" \
      -u "unlocker:unlocker" \
-     -d "db.users.findall(u => u.age > @ageLimit).toList()"
+     -d "db.users.findall(u => u.age > @ageLimit)"
 
 # Insert data
 curl -X POST "http://localhost:5000/query" \
@@ -652,7 +809,7 @@ using var client = new AxarClient("http://localhost:5000", "unlocker", "unlocker
 await client.InsertAsync("users", new { Name = "John", Age = 30 });
 
 // Query with parameters
-var script = "db.users.findall(u => u.name == @name).toList()";
+var script = "db.users.findall(u => u.name == @name)";
 var users = await client.QueryAsync<List<User>>(script, new { name = "John" });
 
 // Update
@@ -663,7 +820,7 @@ var count = await client.Collection<User>("users").Where("age", ">", 18).CountAs
 var first = await client.Collection<User>("users").FirstAsync();
 
 // View management
-await client.CreateViewAsync("ActiveUsers", "return db.users.findall(u => u.active).toList()");
+await client.CreateViewAsync("ActiveUsers", "return db.users.findall(u => u.active)");
 var list = await client.CallViewAsync<List<User>>("ActiveUsers");
 var filtered = await client.CallViewAsync<List<User>>("myview", new { minAge = 18 });
 
@@ -689,7 +846,7 @@ count = client.collection("users").count()
 client.collection("users").where("age", "<", 18).delete()
 
 # View management
-client.create_view("MyView", "return db.users.take(10).toList()")
+client.create_view("MyView", "return db.users.take(10)")
 res = client.call_view("MyView")
 res = client.call_view("MyView", {"minAge": 18})
 ```
@@ -712,13 +869,24 @@ res = client.call_view("MyView", {"minAge": 18})
 dotnet run -- --cors "http://localhost:3000,http://example.com"
 
 # Configuration Parameters
-# You can customize limits and database behaviour via command-line switches or in appsettings.json.
-# --memory-limit        : Memory limit percentage (default: 0.4)
-# --bulk-cache-limit    : Bulk store max cache in bytes (default: 52428800)
-# --max-recursion       : Max script recursion depth (default: 100)
-# --query-timeout       : Max query timeout in minutes (default: 10)
-# --queue-poll-seconds  : Background queue poll interval in seconds (default: 1.0)
-dotnet run -- --memory-limit 0.3 --query-timeout 5
+# Database configuration settings are stored in the sysconfig system collection.
+# They are initialized with default values during database creation.
+# Authorized users can update the settings via: db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+# Settings require a server restart to take effect.
+# Direct inserts into sysconfig are blocked.
+#
+# Properties in sysconfig:
+# - memoryLimitPercentage    : Memory limit percentage (default: 0.4)
+# - bulkStoreMaxCacheBytes   : Bulk store max cache in bytes (default: 52428800)
+# - maxRecursionDepth        : Max script recursion depth (default: 100)
+# - queryTimeoutMinutes      : Max query timeout in minutes (default: 10)
+# - queuePollIntervalSeconds : Background queue poll interval in seconds (default: 1.0)
+#
+# Sys-Prefix Protection:
+# Collection names starting with "sys" are reserved for system use.
+# Only sysusers, sysqueue, sysvaults, sysconfig, and syslogs are allowed.
+# Creating db.sysnew or similar will throw InvalidOperationException.
+# This protection is enforced at Bridge, Engine, and Collection layers.
 
 # Bootstrap Refactoring (Clean Code)
 # Program.cs is kept extremely simple. The entire application setup and configuration
@@ -732,23 +900,54 @@ dotnet run -- --memory-limit 0.3 --query-timeout 5
 ./AxarDB.Cli --insert users "{\"name\":\"Alice\"}"
 ```
 
-## 17. Common Patterns & Troubleshooting
+## 17. Multi-Engine Benchmark Tool
+
+AxarDB ships with a Python-based benchmark tool (`compare.py`) that measures AxarDB (db/memory/bulk) against PostgreSQL, MariaDB, and MongoDB. It generates an interactive HTML report (`output.html`) with Chart.js visualizations.
+
+### Running the Benchmark
+```bash
+python compare.py
+```
+
+### What It Tests
+- Setup (DDL), Single Insert, Bulk Insert, Index Creation
+- Count (COUNT), Filter Query, Range Query, Aggregation (avg age), Update, Delete
+
+### Key Details
+- AxarDB times are measured server-side via `sysqueue` Stopwatch, excluding HTTP overhead.
+- Filter and Range queries use the indexed `age` column across all engines.
+- The report includes a feature comparison table highlighting AxarDB-unique capabilities.
+- On startup, the benchmark automatically raises `queryTimeoutMinutes` in `sysconfig` to 30 minutes to prevent script cancellation during long-running workloads.
+- The speedup row label in both the HTML table and chart is **"How many times faster is AxarDB (memory)?"**, comparing total operation times across all engines against AxarDB (memory) as the baseline.
+- The benchmark awaits queue job completion with a 300-second timeout per operation.
+
+### Report Sections
+- **Engine Status**: Lists each engine with OK or error status.
+- **Operation Times (ms)**: Per-operation timing table.
+- **How many times faster is AxarDB (memory)?**: Speedup comparison chart.
+- **Advanced Features Comparison**: Feature matrix showing AxarDB-unique capabilities.
+- **Test Configuration**: Connection details and methodology notes.
+
+
+## 18. Common Patterns & Troubleshooting
 
 ### Frequent Mistakes
 
 | Mistake | Fix |
 |:---|:---|
-| `db.users.findall()` without `.toList()` | Always add `.toList()` when you need an array |
+| `db.users.findall()` | Returns a ResultSet (iterable directly) |
 | `db.view("name", { param: "value" })` for parameterless view | Omit the second argument: `db.view("name")` |
 | Forgetting `// @access public` in view | Always add access comment as the first line |
 | Using single `=` instead of `==` in predicates | Use `==` for comparison: `u => u.age == 25` |
+| Assuming `.contains()` doesn't exist on strings | AxarDB injects `String.prototype.contains()` — it works for case-insensitive substring search |
+| Using `.contains()` for exact match | Use `==` for exact match; `.contains()` is for substring search |
 
 ### Common Query Patterns
 ```javascript
 // Pagination — skip + take pattern
-var page1 = db.products.findall().take(10).toList();          // Page 1 (records 1-10)
-var page2 = db.products.findall().skip(10).take(10).toList(); // Page 2 (records 11-20)
-var page3 = db.products.findall().skip(20).take(10).toList(); // Page 3 (records 21-30)
+var page1 = db.products.findall().take(10);          // Page 1 (records 1-10)
+var page2 = db.products.findall().skip(10).take(10); // Page 2 (records 11-20)
+var page3 = db.products.findall().skip(20).take(10); // Page 3 (records 21-30)
 
 // Aggregation by iterating
 var total = 0;
@@ -775,13 +974,22 @@ var token = encrypt(guid(), $MY_SALT);
 
 // Hash a password
 var hashed = sha256("plaintext_password");
+
+// Case-insensitive substring search (AxarDB String.prototype.contains)
+var devUsers = db.users.findall(u => u.email.contains("dev"));
+
+// Case-insensitive prefix check (AxarDB String.prototype.startsWith)
+var adminMails = db.users.findall(u => u.email.startsWith("admin@"));
+
+// Bulk substring search
+var esenPlaces = bulk.postalcodes.findall(x => x.placeName.contains("esen"));
 ```
 
 ### Troubleshooting
 *   **401 Unauthorized**: Check credentials. Default is `unlocker:unlocker`.
-*   **Empty Result**: Did you forget `.toList()`? `findall()` returns ResultSet, not array.
-*   **Script Error**: Check JavaScript syntax. Use `console.log()` for debugging.
-*   **Case Sensitivity**: Use `contains()` for case-insensitive search instead of `findall`.
+*   **SyntaxError**: Missing closing parenthesis `)`, mismatched braces `{}`, or unclosed quotes.
+*   **Variable not found**: Check if you misspelled a property name in the predicate.
+*   **Case Sensitivity**: Use `.contains()` on string fields for case-insensitive substring search (AxarDB custom extension), or `db.collection.contains(predicate)` for case-insensitive exact match. Standard `.includes()` is case-sensitive.
 *   **View 404**: Verify view name exactly matches. Check spelling.
 *   **View returns error with parameters**: Ensure HTTP query string keys match `@param` names in the view script exactly.
 

@@ -11,8 +11,17 @@ namespace AxarDB.Wrappers
 
         public override bool TryGetMember(GetMemberBinder binder, out object? result)
         {
-            var key = Data.Keys.FirstOrDefault(k => string.Equals(k, binder.Name, System.StringComparison.OrdinalIgnoreCase));
-            if (key != null && Data.TryGetValue(key, out var val))
+            string? matchedKey = null;
+            foreach (var key in Data.Keys)
+            {
+                if (string.Equals(key, binder.Name, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    matchedKey = key;
+                    break;
+                }
+            }
+
+            if (matchedKey != null && Data.TryGetValue(matchedKey, out var val))
             {
                 var unwrapped = Unwrap(val);
                 if (unwrapped is string strVal)
@@ -30,39 +39,60 @@ namespace AxarDB.Wrappers
         public static string TurkishNormalize(string str)
         {
             if (string.IsNullOrEmpty(str)) return string.Empty;
-            var sb = new System.Text.StringBuilder(str.Length);
-            foreach (var c in str)
+
+            bool needsNormalization = false;
+            for (int i = 0; i < str.Length; i++)
             {
+                char c = str[i];
+                if (c == 'I' || c == 'İ' || c == 'ı' || 
+                    c == 'Ö' || c == 'ö' || 
+                    c == 'Ü' || c == 'ü' || 
+                    c == 'Ç' || c == 'ç' || 
+                    c == 'Ş' || c == 'ş' || 
+                    c == 'Ğ' || c == 'ğ' || 
+                    char.IsUpper(c))
+                {
+                    needsNormalization = true;
+                    break;
+                }
+            }
+
+            if (!needsNormalization) return str;
+
+            char[] chars = new char[str.Length];
+            for (int i = 0; i < str.Length; i++)
+            {
+                char c = str[i];
                 if (c == 'I' || c == 'İ' || c == 'ı' || c == 'i')
                 {
-                    sb.Append('i');
+                    chars[i] = 'i';
                 }
                 else if (c == 'Ö' || c == 'ö')
                 {
-                    sb.Append('ö');
+                    chars[i] = 'ö';
                 }
                 else if (c == 'Ü' || c == 'ü')
                 {
-                    sb.Append('ü');
+                    chars[i] = 'ü';
                 }
                 else if (c == 'Ç' || c == 'ç')
                 {
-                    sb.Append('ç');
+                    chars[i] = 'ç';
                 }
                 else if (c == 'Ş' || c == 'ş')
                 {
-                    sb.Append('ş');
+                    chars[i] = 'ş';
                 }
                 else if (c == 'Ğ' || c == 'ğ')
                 {
-                    sb.Append('ğ');
+                    chars[i] = 'ğ';
                 }
                 else
                 {
-                    sb.Append(char.ToLowerInvariant(c));
+                    chars[i] = char.ToLowerInvariant(c);
                 }
             }
-            return sb.ToString();
+            return new string(chars);
         }
     }
 }

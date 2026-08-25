@@ -31,7 +31,7 @@ If you run the tool without providing credentials, it will prompt you:
 
 ### Run Inline Script
 ```bash
-./AxarDB.Cli -h http://localhost:1111 -u admin -p admin -s "db.users.findall().toList()"
+./AxarDB.Cli -h http://localhost:1111 -u admin -p admin -s "db.users.findall()"
 ```
 
 ### Run Script from File (Interactive Auth)
@@ -44,7 +44,7 @@ You can provide just the script file, and the CLI will prompt for connection det
 
 ### Run Script from File (Automated)
 ```bash
-# query.js: db.users.where(u => u.active).toList()
+# query.js: db.users.where(u => u.active)
 ./AxarDB.Cli -h http://localhost:1111 -u admin -p admin -f query.js
 ```
 

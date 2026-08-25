@@ -22,13 +22,24 @@
 
 | 特性 | 描述 |
 |:---|:---|
-| **📜 JavaScript 查询** | 完整的 JS 语法：`db.users.findall(x => x.active).toList()`。在 ResultSets 和原生数组上支持 `count()` 和 `distinct()` 等新扩展。 |
+| **📜 JavaScript 查询** | 完整的 JS 语法：`db.users.findall(x => x.active)`。在 ResultSets 和原生数组上支持 `count()` 和 `distinct()` 等新扩展。 |
 | **⚡ 高性能** | 采用 `ConcurrentDictionary` 的内存存储，基于 PLINQ 的延迟计算（Lazy Evaluation），以及严格限制的 40% 动态 RAM 缓存。 |
 | **📄 CSV 引擎** | 双向强大的 CSV 支持。通过 `csv(input)` 将文本转换为集合或将集合转换为 CSV。 |
 | **🔍 智能索引** | 支持 ASC/DESC 索引。 |
 | **🔗 连接 (Joins)** | 集合连接： `db.join(users, orders)`。 |
-| **🛡️ 安全** | 基本认证 (支持 SHA256 哈希) 与 **注入防护**。 |
+| **🛡️ 安全** | 基本认证 (支持 SHA256 哈希), 注入防护和保护保留的 `sys` 前缀集合。 |
 | **🛠️ 实用工具** | 内置辅助函数：`md5`, `sha256`, `encrypt`, `random`, `base64`。 |
+
+---
+
+## ⚙️ 配置
+
+服务器设置存储在 `sysconfig` 系统集合中。`memoryLimitPercentage`、`bulkStoreMaxCacheBytes`、`maxRecursionDepth`、`queryTimeoutMinutes` 和 `queuePollIntervalSeconds` 的更改在重启后生效。以 `sys` 为前缀的集合名称保留用于内部基础设施。
+
+```javascript
+// 更新配置 (需要重启)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 

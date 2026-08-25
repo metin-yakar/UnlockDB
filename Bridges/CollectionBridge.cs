@@ -113,10 +113,12 @@ namespace AxarDB.Bridges
 
         public object? insert(object docObj)
         {
-            if (string.Equals(_collection.Name, "sysqueue", StringComparison.OrdinalIgnoreCase) ||
-                string.Equals(_collection.Name, "sysvaults", StringComparison.OrdinalIgnoreCase))
+            if (_collection.Name.StartsWith("sys", StringComparison.OrdinalIgnoreCase))
             {
-                throw new System.InvalidOperationException($"Direct insertion into system collection '{_collection.Name}' is not allowed. Use the appropriate system function instead.");
+                if (!string.Equals(_collection.Name, "sysusers", StringComparison.OrdinalIgnoreCase))
+                {
+                    throw new System.InvalidOperationException($"Direct insertion into system collection '{_collection.Name}' is not allowed.");
+                }
             }
 
             var dict = ConvertToDictionary(docObj);

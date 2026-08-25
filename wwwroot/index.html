@@ -57,7 +57,12 @@
             <div class="tab-content" id="tabContent">
                 <!-- Query Section -->
                 <section class="query-section" id="querySection">
-                    <div class="toolbar">
+                    <div class="toolbar" style="position: relative;">
+                        <div id="alertContainer" style="position: absolute; left: 1.5rem; top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem; pointer-events: none; z-index: 1000; align-items: flex-start;"></div>
+                        <button class="btn-history" id="btnAiQuery" title="AI Query">
+                            <i data-lucide="bot"></i>
+                            AI Query
+                        </button>
                         <button class="btn-history" id="btnHistory" title="Query History">
                             <i data-lucide="history"></i>
                             History
@@ -66,6 +71,10 @@
                             <i data-lucide="play"></i>
                             Execute (Ctrl+Enter)
                         </button>
+                    </div>
+                    <div class="sysconfig-banner">
+                        <i data-lucide="info" style="width: 14px; height: 14px; color: var(--accent); flex-shrink: 0;"></i>
+                        <span>Bilgi: <strong>sysconfig</strong> koleksiyonundaki sistem ayarları değişiklikleri, sunucu yeniden başlatıldığında aktif olacaktır.</span>
                     </div>
                     <div id="editorContainer" class="editor-container"></div>
                     <div class="resizer-h" id="resizerH"></div>
@@ -84,13 +93,25 @@
                             </button>
                         </div>
                     </div>
-                    <div class="grid-container" id="gridContainer">
-                        <table id="resultsTable">
-                            <thead id="tableHead"></thead>
-                            <tbody id="tableBody"></tbody>
-                        </table>
-                        <div id="noResults" style="padding: 2rem; color: var(--text-secondary); text-align: center;">
-                            Execute a query to see results
+                    <div style="display: flex; flex: 1; overflow: hidden; width: 100%;">
+                        <div class="grid-container" id="gridContainer" style="flex: 1;">
+                            <table id="resultsTable">
+                                <thead id="tableHead"></thead>
+                                <tbody id="tableBody"></tbody>
+                            </table>
+                            <div id="noResults" style="padding: 2rem; color: var(--text-secondary); text-align: center;">
+                                Execute a query to see results
+                            </div>
+                        </div>
+                        <div class="resizer-json" id="resizerJsonView" style="display: none;"></div>
+                        <div id="jsonViewPanel" style="display: none; width: 400px; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg-primary);">
+                            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.5rem 1rem; border-bottom: 1px solid var(--border); background: var(--bg-secondary);">
+                                <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);"><i data-lucide="file-json" style="width: 14px; height: 14px; display: inline-block; vertical-align: middle; margin-right: 4px;"></i> JsonView</span>
+                                <button class="btn-icon" onclick="closeJsonView()" title="Close">
+                                    <i data-lucide="x"></i>
+                                </button>
+                            </div>
+                            <div id="jsonViewEditorContainer" style="flex: 1; overflow: hidden;"></div>
                         </div>
                     </div>
                 </section>
@@ -101,6 +122,9 @@
                 <div class="tab-bar-list" id="tabBarList"></div>
                 <button class="tab-add" id="btnAddTab" title="New Tab">
                     <i data-lucide="plus" style="width:14px;height:14px"></i>
+                </button>
+                <button class="tab-add" id="btnCloseOtherTabs" title="İlk sekme dışındakileri kapat">
+                    <i data-lucide="x-square" style="width:14px;height:14px"></i>
                 </button>
             </div>
         </main>
@@ -173,6 +197,44 @@
     <!-- Transparent overlay during resizing -->
     <div id="resizeOverlay"
         style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:9999; cursor: col-resize;"></div>
+
+    <!-- AI Query Modal -->
+    <div id="aiQueryModal" class="ai-modal" style="display: none; position: absolute; top: 60px; right: 20px; z-index: 1000; background: var(--bg-secondary); border: 1px solid var(--border); border-radius: 8px; width: 400px; box-shadow: 0 10px 25px rgba(0,0,0,0.5); resize: both; overflow: hidden; min-width: 300px; min-height: 200px; flex-direction: column;">
+        <div class="modal-header" id="aiQueryModalHeader" style="cursor: move; display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border); background: rgba(0,0,0,0.2);">
+            <h3 style="margin: 0; display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--text-primary);"><i data-lucide="bot"></i> AI Query</h3>
+            <button class="btn-icon" id="btnCloseAiQuery" title="Close">
+                <i data-lucide="x"></i>
+            </button>
+        </div>
+        <div style="padding: 1rem; flex: 1; display: flex; flex-direction: column; gap: 0.75rem; overflow-y: auto;">
+            <details id="aiSettingsAccordion" style="border: 1px solid var(--border); border-radius: 4px; padding: 0.5rem; background: var(--bg-primary);">
+                <summary style="cursor: pointer; font-size: 13px; font-weight: 600; outline: none; user-select: none; color: var(--text-primary);">API Settings</summary>
+                <div style="margin-top: 0.75rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" style="font-size: 12px; margin-bottom:2px;">API URL</label>
+                        <input type="text" id="aiApiUrl" class="form-input" placeholder="https://api.openai.com/v1/chat/completions" style="font-size: 12px; padding: 6px;">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" style="font-size: 12px; margin-bottom:2px;">Model Name</label>
+                        <input type="text" id="aiModelName" class="form-input" placeholder="gpt-4o" style="font-size: 12px; padding: 6px;">
+                    </div>
+                    <div class="form-group" style="margin:0;">
+                        <label class="form-label" style="font-size: 12px; margin-bottom:2px;">API Key</label>
+                        <input type="password" id="aiApiKey" class="form-input" placeholder="sk-..." style="font-size: 12px; padding: 6px;">
+                    </div>
+                </div>
+            </details>
+            
+            <textarea id="aiQueryInput" class="form-input" rows="5" placeholder="What do you want to query?" style="width: 100%; resize: none; font-family: inherit; font-size: 13px; padding: 0.5rem; line-height: 1.4; overflow-y: hidden;"></textarea>
+            
+            <div style="display: flex; justify-content: flex-end;">
+                <button class="btn-execute" id="btnAiGenerate" style="font-size: 13px; padding: 0.5rem 1rem;">
+                    <i data-lucide="sparkles"></i>
+                    Generate (Ctrl+Enter)
+                </button>
+            </div>
+        </div>
+    </div>
 
     <script src="js/app.js"></script>
 </body>

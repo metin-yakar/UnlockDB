@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AxarDB.Definitions;
 
 namespace AxarDB.Logging
 {
@@ -20,11 +21,11 @@ namespace AxarDB.Logging
         {
             try
             {
-                var fileName = DateTime.Now.ToString("yyyy-MM-dd") + ".txt";
+                var fileName = ServerTime.Now.ToString("yyyy-MM-dd") + ".txt";
                 var filePath = Path.Combine(RequestLogsPath, fileName);
                 
-                // [zaman] - [istemci ip adresi] - [db kullanıcısı] - [request json tek satırda trimlenmiş] - [istek ile cevap arasında geçen süre milisaniye (ms) olarak] - [sonuç başarılı veya başarısız ise kısa bir hata sebebi açıklaması]
-                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                // Log format: [timestamp] - [client ip] - [db user] - [request json, single-line trimmed] - [duration in ms] - [Success or Failed: <reason>]
+                var timestamp = ServerTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
                 var status = success ? "Success" : $"Failed: {errorMessage}";
                 var cleanedJson = requestJson?.Replace("\r", "").Replace("\n", "").Trim() ?? "";
                 
@@ -46,10 +47,10 @@ namespace AxarDB.Logging
         {
             try
             {
-                var fileName = DateTime.Now.ToString("yyyy-MM-dd") + ".txt";
+                var fileName = ServerTime.Now.ToString("yyyy-MM-dd") + ".txt";
                 var filePath = Path.Combine(ErrorLogsPath, fileName);
                 
-                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var timestamp = ServerTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
                 var logLine = $"[{timestamp}] {message}";
                 
                 lock (_lock)
@@ -68,10 +69,10 @@ namespace AxarDB.Logging
         {
             try
             {
-                var fileName = DateTime.Now.ToString("yyyy-MM-dd") + ".txt";
+                var fileName = ServerTime.Now.ToString("yyyy-MM-dd") + ".txt";
                 var filePath = Path.Combine(DebugLogsPath, fileName);
                 
-                var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
+                var timestamp = ServerTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
                 var logLine = $"[{timestamp}] [DEBUG] {message}";
                 
                 lock (_lock)

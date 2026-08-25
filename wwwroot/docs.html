@@ -427,12 +427,10 @@
                 <a class="nav-link" data-target="bulk-store">
                     <i data-lucide="hard-drive"></i> Bulk Store (JSONL)
                 </a>
-                <a class="nav-link" data-target="joins">
-                    <i data-lucide="git-merge"></i> Join Operations
-                </a>
-                <a class="nav-link" data-target="indexing">
-                    <i data-lucide="list-ordered"></i> Index
-                </a>
+                <a class="nav-link" data-target="joins"><i data-lucide="git-merge"></i>Join Operations</a>
+                <a class="nav-link" data-target="uuid-v7"><i data-lucide="fingerprint"></i>UUID v7 Support</a>
+                <a class="nav-link" data-target="indexing"><i data-lucide="list-ordered"></i> Index</a>
+                <a class="nav-link" data-target="prototype-extensions"><i data-lucide="code"></i> Prototype Extensions</a>
             </div>
 
             <div class="nav-section">
@@ -455,6 +453,12 @@
                 <a class="nav-link" data-target="queue">
                     <i data-lucide="clock"></i> Queue Operations
                 </a>
+                <a class="nav-link" data-target="data-recovery">
+                    <i data-lucide="shield-alert"></i> Data Recovery
+                </a>
+                <a class="nav-link" data-target="system-config">
+                    <i data-lucide="settings"></i> System Configuration
+                </a>
                 <a class="nav-link" data-target="monitoring">
                     <i data-lucide="activity"></i> Monitoring
                 </a>
@@ -467,6 +471,22 @@
                 </a>
                 <a class="nav-link" data-target="security">
                     <i data-lucide="shield"></i> Security
+                </a>
+            </div>
+
+            <div class="nav-section">
+                <div class="nav-section-title">SDKs & Tools</div>
+                <a class="nav-link" data-target="dotnet-sdk">
+                    <i data-lucide="code-2"></i> .NET SDK (C#)
+                </a>
+                <a class="nav-link" data-target="python-sdk">
+                    <i data-lucide="binary"></i> Python SDK
+                </a>
+                <a class="nav-link" data-target="cli-tool">
+                    <i data-lucide="terminal"></i> CLI Tool
+                </a>
+                <a class="nav-link" data-target="benchmark">
+                    <i data-lucide="bar-chart-3"></i> Benchmark Tool
                 </a>
             </div>
 
@@ -500,8 +520,13 @@
                 <div class="info-box" style="border-left-color: var(--accent); background: rgba(99, 102, 241, 0.05);">
                     <strong>🚀 Latest Updates:</strong>
                     <ul>
+                        <li><strong>System Configuration (sysconfig):</strong> Server-wide settings (<code>memoryLimitPercentage</code>, <code>bulkStoreMaxCacheBytes</code>, <code>maxRecursionDepth</code>, <code>queryTimeoutMinutes</code>, <code>queuePollIntervalSeconds</code>) can now be managed via the <code>sysconfig</code> collection.</li>
+                        <li><strong>Sys-prefix Protection:</strong> Custom collections with names starting with <code>sys</code> are now blocked to prevent conflicts with internal system infrastructure.</li>
+                        <li><strong>Bulk Query Memory Optimization:</strong> Bulk (JSONL) queries now use chunked processing with temporary lightweight indexes, keeping memory bounded by <code>bulkStoreMaxCacheBytes</code> even for very large files.</li>
                         <li><strong>Multi-Language UTF-8 HTTP Encoding:</strong> Full UTF-8 support for query string parameters, resolving encoding issues for non-Latin alphabets (Turkish, Arabic, Russian, Chinese, Japanese, etc.).</li>
                         <li><strong>Lazy Collection Directory Creation:</strong> Collection folders are generated only when the first write operation (<code>insert</code>) occurs, preventing clutter from read-only checks on non-existent collections.</li>
+                        <li><strong>UUID v7 as Default ID Scheme:</strong> All collections (Standard, Memory, Bulk) now generate RFC 9562 compliant UUID v7 IDs by default. New query functions <code>guidv7()</code>, <code>guidv7(datetime)</code>, and <code>guidv7CreatedAt(guid)</code> are available in all script contexts.</li>
+                        <li><strong>Multi-Engine Benchmark Tool (compare.py):</strong> A Python-based benchmark measures AxarDB (db/memory/bulk) against PostgreSQL, MariaDB, and MongoDB. Generates an interactive Chart.js HTML report (<code>output.html</code>) with per-operation timing, a <em>"How many times faster is AxarDB (memory)?"</em> speedup chart, and a feature comparison matrix. The tool automatically raises <code>queryTimeoutMinutes</code> to 30 minutes before running and awaits each queue job with a 300-second timeout to prevent false cancellations.</li>
                     </ul>
                 </div>
             </section>
@@ -565,10 +590,18 @@
 <span class="keyword">var</span> user = db.users.<span class="function">find</span>(u => u.age > <span class="number">18</span>);
 
 <span class="comment">// List all matches (convert to array with toList())</span>
-<span class="keyword">var</span> admins = db.users.<span class="function">findall</span>(u => u.role == <span class="string">'admin'</span>).<span class="function">toList</span>();
+<span class="keyword">var</span> admins = db.users.<span class="function">findall</span>(u => u.role == <span class="string">'admin'</span>);
+
+<span class="comment">// Check if an item is in an array (Contains logic)</span>
+<span class="keyword">var</span> targetCats = [<span class="number">66</span>, <span class="number">69</span>, <span class="number">74</span>];
+<span class="keyword">var</span> myCats = db.categories.<span class="function">findall</span>(x => x.rowNumber != <span class="keyword">null</span> && x.rowNumber.<span class="function">includes</span>(targetCats));
+
+<span class="comment">// Compare two arrays for exact equality (SequenceEqual logic)</span>
+<span class="keyword">var</span> targetTags = [<span class="string">"developer"</span>, <span class="string">"senior"</span>];
+<span class="keyword">var</span> matches = db.users.<span class="function">findall</span>(x => x.tags.<span class="function">includes</span>(targetTags));
 
 <span class="comment">// Get the entire collection</span>
-<span class="keyword">var</span> allUsers = db.users.<span class="function">findall</span>().<span class="function">toList</span>();
+<span class="keyword">var</span> allUsers = db.users.<span class="function">findall</span>();
 
 <span class="comment">// Get the first record</span>
 <span class="keyword">var</span> first = db.users.<span class="function">findall</span>().<span class="function">first</span>();
@@ -578,16 +611,24 @@
 <span class="keyword">var</span> adults = db.users.<span class="function">findall</span>().<span class="function">count</span>(u => u.age > <span class="number">18</span>);
 
 <span class="comment">// Distinct unique values</span>
-<span class="keyword">var</span> roles = db.users.<span class="function">findall</span>().<span class="function">distinct</span>(u => u.role).<span class="function">toList</span>();
+<span class="keyword">var</span> roles = db.users.<span class="function">findall</span>().<span class="function">distinct</span>(u => u.role);
 
 <span class="comment">// Case-insensitive search</span>
 <span class="keyword">var</span> devs = db.users.<span class="function">contains</span>(x => x.title == <span class="string">"developer"</span>);
 
 <span class="comment">// Pagination (skip and take)</span>
-<span class="keyword">var</span> page2 = db.users.<span class="function">findall</span>().<span class="function">skip</span>(<span class="number">10</span>).<span class="function">take</span>(<span class="number">10</span>).<span class="function">toList</span>();</code></pre>
+<span class="keyword">var</span> page2 = db.users.<span class="function">findall</span>().<span class="function">skip</span>(<span class="number">10</span>).<span class="function">take</span>(<span class="number">10</span>);
+
+<span class="comment">// Sorting (orderBy and orderByDesc)</span>
+<span class="keyword">var</span> oldestFirst = db.users.<span class="function">findall</span>().<span class="function">orderBy</span>(u => u.age);
+<span class="keyword">var</span> youngestFirst = db.users.<span class="function">findall</span>().<span class="function">orderByDesc</span>(u => u.age);
+
+<span class="comment">// Min and Max values</span>
+<span class="keyword">var</span> maxAge = db.users.<span class="function">findall</span>().<span class="function">max</span>(u => u.age);
+<span class="keyword">var</span> minAge = db.users.<span class="function">findall</span>().<span class="function">min</span>(u => u.age);</code></pre>
                 <div class="info-box">
-                    <strong>💡 Important:</strong> <code>findall()</code> returns a ResultSet. To use it as an array,
-                    <code>.toList()</code> must be called.
+                    <strong>💡 Important:</strong> <code>findall()</code> returns a ResultSet. To convert it into a standard JavaScript array,
+                    you can optionally call <code>.toList()</code>.
                 </div>
             </section>
 
@@ -642,7 +683,7 @@ memory.sessions.<span class="function">insert</span>({ userId: <span class="stri
 memory.sessions.<span class="function">insert</span>({ userId: <span class="string">"user_456"</span> }, <span class="number">2.5</span>);
 
 <span class="comment">// Query active memory records</span>
-<span class="keyword">var</span> active = memory.sessions.<span class="function">findall</span>(s => s.token != <span class="keyword">null</span>).<span class="function">toList</span>();
+<span class="keyword">var</span> active = memory.sessions.<span class="function">findall</span>(s => s.token != <span class="keyword">null</span>);
 
 <span class="comment">// Delete from memory</span>
 memory.sessions.<span class="function">findall</span>(s => s.userId == <span class="string">"user_123"</span>).<span class="function">delete</span>();</code></pre>
@@ -656,7 +697,8 @@ memory.sessions.<span class="function">findall</span>(s => s.userId == <span cla
                 <h3>Key Features</h3>
                 <ul>
                     <li><strong>High-Performance JSONL:</strong> Optimized for bulk loading and static lookups without server-level locks.</li>
-                    <li><strong>LRU Memory Cache:</strong> Automatically caches records in memory up to a 50 MB budget, evicting the least recently used collections.</li>
+                    <li><strong>LRU Memory Cache:</strong> Automatically caches records in memory up to a configurable byte budget (default: 50 MB), evicting the least recently used collections.</li>
+                    <li><strong>Memory-Bounded Chunked Queries:</strong> Filtered queries on large Bulk collections use chunked processing with temporary lightweight indexes. Data is read line-by-line, keeping memory usage bounded by <code>bulkStoreMaxCacheBytes</code>.</li>
                     <li><strong>Auto-Reload & Watcher:</strong> Monitor changes to files on disk via a FileSystemWatcher to automatically refresh memory cache. Can also be reloaded manually.</li>
                 </ul>
 
@@ -682,13 +724,60 @@ bulk.<span class="function">reload</span>(<span class="string">"countries"</span
     alias(db.users, <span class="string">"u"</span>), 
     alias(db.orders, <span class="string">"o"</span>)
 )
-.<span class="function">where</span>(x => x.u._id == x.o.userId).<span class="function">toList</span>();
+.<span class="function">where</span>(x => x.u._id == x.o.userId);
 
 <span class="comment">// Default: Join with indexed properties (j1, j2...)</span>
 <span class="keyword">var</span> data = db.<span class="function">join</span>(db.products, db.categories).<span class="function">select</span>(x => ({
     name: x.j1.productName,
     category: x.j2.categoryName
 }));</code></pre>
+            </section>
+
+            <!-- UUID v7 Support -->
+            <section class="section" id="uuid-v7">
+                <h2>UUID v7 Support</h2>
+                <p>AxarDB uses native RFC 9562 compliant UUID v7 as its default <code>_id</code> generation strategy for all collections. This guarantees chronologically ordered, time-sortable IDs that enhance lookup speeds. Older UUID v4 keys are fully compatible and can coexist within the same collections.</p>
+                
+                <h3>Global Functions</h3>
+                <table class="endpoint-table">
+                    <thead>
+                        <tr>
+                            <th>Function</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>guidv7()</code></td>
+                            <td>Generates a new UUID v7 using current UTC time.</td>
+                            <td><code>guidv7()</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>guidv7(datetime)</code></td>
+                            <td>Generates a new UUID v7 using the specified ISO 8601 date string.</td>
+                            <td><code>guidv7("2024-01-15T10:30:00Z")</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>guidv7CreatedAt(id)</code></td>
+                            <td>Extracts the UTC creation timestamp from a valid UUID v7 string. Returns <code>Date</code> or <code>null</code>.</td>
+                            <td><code>guidv7CreatedAt(doc._id)</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>guid()</code></td>
+                            <td>Generates a standard UUID v4. Maintained for legacy compatibility.</td>
+                            <td><code>guid()</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Usage Example</h3>
+                <pre><code><span class="comment">// Query creation date of a document</span>
+<span class="keyword">var</span> doc = db.products.<span class="function">find</span>(p => p.name == <span class="string">"Super Phone 0"</span>);
+<span class="keyword">if</span> (doc) {
+    <span class="keyword">var</span> createdTime = <span class="function">guidv7CreatedAt</span>(doc._id);
+    console.<span class="function">log</span>(<span class="string">"Product created at: "</span> + createdTime);
+}</code></pre>
             </section>
 
             <!-- Indexing -->
@@ -704,6 +793,86 @@ db.users.<span class="function">index</span>(x => x.createdAt, <span class="stri
 db.users.<span class="function">insert</span>({...}).<span class="function">index</span>(x => x.name);</code></pre>
             </section>
 
+            <!-- Prototype Extensions & Case-Insensitive Search -->
+            <section class="section" id="prototype-extensions">
+                <h2>Built-in Prototype Extensions & Case-Insensitive Search</h2>
+                <p>AxarDB extends native JavaScript prototypes on every script execution to add powerful utility methods. It also provides two distinct methods for case-insensitive searching.</p>
+
+                <h3>Case-Insensitive Search Mechanisms</h3>
+                <p>Do not confuse these two mechanisms as they serve different purposes:</p>
+                <ul>
+                    <li><strong>Collection-Level <code>contains</code> (Exact Match)</strong>: Uses a case-insensitive wrapper so property access is case-insensitive, performing exact matching.</li>
+                    <li><strong>String Prototype <code>.contains(str)</code> (Substring Search)</strong>: Custom method injected into all string instances for case-insensitive substring matching.</li>
+                </ul>
+                <pre><code><span class="comment">// 1. Collection-Level exact match (case-insensitive properties)</span>
+<span class="keyword">var</span> devs = db.users.<span class="function">contains</span>(x => x.title == <span class="string">"developer"</span>);
+<span class="comment">// Matches "Developer", "DEVELOPER", "developer"</span>
+
+<span class="comment">// 2. String Prototype case-insensitive substring search</span>
+<span class="keyword">var</span> matches = bulk.postalcodes.<span class="function">findall</span>(x => x.placeName.<span class="function">contains</span>(<span class="string">"esen"</span>));
+<span class="comment">// Matches "Esenler", "ESENYURT", "Büyükçekmece" (contains "esen")</span></code></pre>
+
+                <h3>String Prototype Extensions</h3>
+                <table class="endpoint-table">
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>.contains(str)</code></td>
+                            <td>Case-insensitive substring search. Turkish character aware.</td>
+                            <td><code>"İstanbul".contains("istan")</code> &rarr; <code>true</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>.startsWith(str)</code></td>
+                            <td>Case-insensitive prefix check. Turkish character aware.</td>
+                            <td><code>"İZMİR".startsWith("izm")</code> &rarr; <code>true</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>.toLowerCase()</code></td>
+                            <td>Turkish-aware lowercase conversion (handles <code>İ &rarr; i</code>, etc.).</td>
+                            <td><code>"İZMİR".toLowerCase()</code> &rarr; <code>"izmir"</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Array & Object Prototype Extensions</h3>
+                <table class="endpoint-table">
+                    <thead>
+                        <tr>
+                            <th>Prototype</th>
+                            <th>Method</th>
+                            <th>Description</th>
+                            <th>Example</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Array</td>
+                            <td><code>.count(predicate?)</code></td>
+                            <td>Counts matching elements, or returns array length if no predicate.</td>
+                            <td><code>arr.count(x => x.age > 18)</code></td>
+                        </tr>
+                        <tr>
+                            <td>Array</td>
+                            <td><code>.distinct(selector?)</code></td>
+                            <td>Deduplicates array. Optional selector projects values first.</td>
+                            <td><code>arr.distinct(x => x.role)</code></td>
+                        </tr>
+                        <tr>
+                            <td>Array / Object</td>
+                            <td><code></code></td>
+                            <td>Converts resultsets/iterables to standard arrays. Identity on arrays.</td>
+                            <td><code>db.users.findall()</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
             <!-- Views -->
             <section class="section" id="views">
                 <h2>Views</h2>
@@ -714,14 +883,14 @@ db.users.<span class="function">insert</span>({...}).<span class="function">inde
                 <pre><code><span class="comment">// Accessible via HTTP GET /views/activeUsers (No Auth required)</span>
 db.<span class="function">saveView</span>(<span class="string">"activeUsers"</span>, <span class="string">`
 // @access public
-return db.users.findall(u => u.active == true).toList();
+return db.users.findall(u => u.active == true);
 `</span>);</code></pre>
 
                 <h3>Private View (Internal Use Only)</h3>
                 <pre><code><span class="comment">// Can only be called with db.view(), not accessible from HTTP</span>
 db.<span class="function">saveView</span>(<span class="string">"internalReport"</span>, <span class="string">`
 // @access private
-return db.orders.findall(o => o.status == "pending").toList();
+return db.orders.findall(o => o.status == "pending");
 `</span>);</code></pre>
 
                 <h3>View Usage</h3>
@@ -893,6 +1062,135 @@ event.timestamp   <span class="comment">// Server time (ISO format)</span></code
                 </ul>
             </section>
 
+            <!-- Data Recovery -->
+            <section class="section" id="data-recovery">
+                <h2>Data Recovery (Fail-safe Backup)</h2>
+                <div class="info-box">
+                    AxarDB provides an automatic, zero-configuration fail-safe data recovery mechanism to protect against accidental data loss.
+                </div>
+                <p>Every state-changing operation (such as <code>insert</code>, <code>update</code>, <code>delete</code>, <code>drop</code>, <code>saveView</code>, <code>deleteTrigger</code>, etc.) across the <code>db</code>, <code>bulk</code>, and <code>sys</code> collections automatically generates a reverse query. For example, an <code>insert</code> operation will generate a corresponding <code>delete()</code> query to easily undo the addition.</p>
+                <p>These recovery queries are appended sequentially into a daily file located at <code>backup_queries/YYYY-MM-DD.txt</code>. If an accidental deletion or modification occurs, you can manually execute these queries to restore your data to its previous state.</p>
+                <div class="warning-box">
+                    The backup logging operates in a fail-safe wrapper. Any I/O errors that occur during the backup logging process are silently handled and will <strong>never</strong> interrupt the main database transaction.
+                </div>
+            </section>
+
+            <!-- System Configuration -->
+            <section class="section" id="system-config">
+                <h2>System Configuration (sysconfig)</h2>
+                <p>AxarDB uses the <code>sysconfig</code> system collection to manage server-wide configuration settings. Changes to this collection are stored on disk and applied the next time the server restarts.</p>
+
+                <h3>Available Configuration Fields</h3>
+                <table class="endpoint-table">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Type</th>
+                            <th>Default</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>memoryLimitPercentage</code></td>
+                            <td>double</td>
+                            <td>40</td>
+                            <td>Maximum percentage of total system RAM used for document caching (0-100)</td>
+                        </tr>
+                        <tr>
+                            <td><code>bulkStoreMaxCacheBytes</code></td>
+                            <td>long</td>
+                            <td>52428800</td>
+                            <td>Maximum bytes for Bulk Store LRU memory cache (default: 50 MB)</td>
+                        </tr>
+                        <tr>
+                            <td><code>maxRecursionDepth</code></td>
+                            <td>int</td>
+                            <td>10</td>
+                            <td>Maximum recursion depth for query operations to prevent infinite loops</td>
+                        </tr>
+                        <tr>
+                            <td><code>queryTimeoutMinutes</code></td>
+                            <td>int</td>
+                            <td>5</td>
+                            <td>Maximum execution time (in minutes) before a query is automatically cancelled</td>
+                        </tr>
+                        <tr>
+                            <td><code>queuePollIntervalSeconds</code></td>
+                            <td>double</td>
+                            <td>30</td>
+                            <td>Interval (in seconds) for the background queue processor polling cycle</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Updating Configuration</h3>
+                <pre><code><span class="comment">// Reading current config</span>
+<span class="keyword">var</span> config = db.sysconfig.<span class="function">findall</span>().<span class="function">first</span>();
+console.<span class="function">log</span>(<span class="string">"Memory limit: "</span> + config.memoryLimitPercentage + <span class="string">"%"</span>);
+
+<span class="comment">// Updating settings (requires server restart to take effect)</span>
+db.sysconfig.<span class="function">findall</span>().<span class="function">update</span>({
+    memoryLimitPercentage: <span class="number">60</span>,
+    queryTimeoutMinutes: <span class="number">10</span>,
+    queuePollIntervalSeconds: <span class="number">15</span>
+});</code></pre>
+
+                <div class="warning-box">
+                    <strong>⚠️ Restart Required:</strong> Changes to the <code>sysconfig</code> collection take effect after a server restart. The management console displays a contextual banner only when you are actively working on the <code>sysconfig</code> collection.
+                </div>
+
+                <h3>System Collections Overview</h3>
+                <p>AxarDB includes four system collections, each serving a critical infrastructure role:</p>
+                <table class="endpoint-table">
+                    <thead>
+                        <tr>
+                            <th>Collection</th>
+                            <th>Purpose</th>
+                            <th>Insert Restriction</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>sysusers</code></td>
+                            <td>User accounts and credentials for Basic Authentication</td>
+                            <td>Direct insert restricted</td>
+                        </tr>
+                        <tr>
+                            <td><code>sysvaults</code></td>
+                            <td>Secure key-value store for API keys and secrets</td>
+                            <td>Must use <code>addVault()</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>sysconfig</code></td>
+                            <td>Server-wide configuration parameters</td>
+                            <td>Direct insert blocked</td>
+                        </tr>
+                        <tr>
+                            <td><code>sysqueue</code></td>
+                            <td>Background task queue for deferred execution</td>
+                            <td>Must use <code>queue()</code></td>
+                        </tr>
+                        <tr>
+                            <td><code>syslogs</code></td>
+                            <td>Virtual read-only collection for querying system logs</td>
+                            <td>Read-only (modifications prohibited)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>Reserved <code>sys</code> Prefix</h3>
+                <p>Any collection name starting with <code>sys</code> is reserved for internal system use. Attempting to create, access, or insert into a custom collection with a <code>sys</code> prefix (e.g., <code>db.sysnew</code>) will throw an <code>InvalidOperationException</code>. This protection is enforced at multiple layers:</p>
+                <ul>
+                    <li><strong>Bridge Layer:</strong> <code>db.sysnew</code> → blocked by <code>AxarDBBridge.TryGetMember</code></li>
+                    <li><strong>Engine Layer:</strong> <code>AxarDB("sysnew")</code> → blocked by <code>DatabaseEngine</code> constructor binding</li>
+                    <li><strong>Collection Layer:</strong> <code>db.sysnew.insert(...)</code> → blocked by <code>Collection.Insert</code></li>
+                </ul>
+                <div class="info-box">
+                    <strong>💡 Only Pre-defined System Collections:</strong> <code>sysusers</code>, <code>sysqueue</code>, <code>sysvaults</code>, <code>sysconfig</code>, and <code>syslogs</code> are the only allowed <code>sys</code>-prefixed collection names.
+                </div>
+            </section>
+
             <!-- Monitoring Dashboard -->
             <section class="section" id="monitoring">
                 <h2>Real-time Monitoring Dashboard</h2>
@@ -986,11 +1284,124 @@ db.users.<span class="function">insert</span>({
                 </div>
             </section>
 
+            <!-- .NET SDK -->
+            <section class="section" id="dotnet-sdk">
+                <h2>.NET SDK (C#)</h2>
+                <p>Integrate AxarDB into your .NET applications using the official AxarDB SDK.</p>
+                <pre><code><span class="keyword">using</span> AxarDB.Sdk;
+
+<span class="comment">// Initialize Client</span>
+<span class="keyword">using</span> <span class="keyword">var</span> client = <span class="keyword">new</span> <span class="function">AxarClient</span>(<span class="string">"http://localhost:5000"</span>, <span class="string">"unlocker"</span>, <span class="string">"unlocker"</span>);
+
+<span class="comment">// Insert Document</span>
+<span class="keyword">await</span> client.<span class="function">InsertAsync</span>(<span class="string">"users"</span>, <span class="keyword">new</span> { Name = <span class="string">"John"</span>, Age = <span class="number">30</span> });
+
+<span class="comment">// Query with Parameters</span>
+<span class="keyword">var</span> script = <span class="string">"db.users.findall(u => u.name == @name)"</span>;
+<span class="keyword">var</span> users = <span class="keyword">await</span> client.<span class="function">QueryAsync</span>&lt;<span class="keyword">List</span>&lt;User&gt;&gt;(script, <span class="keyword">new</span> { name = <span class="string">"John"</span> });
+
+<span class="comment">// Update Documents</span>
+<span class="keyword">await</span> client.<span class="function">UpdateAsync</span>(<span class="string">"users"</span>, <span class="string">"u => u.name == 'John'"</span>, <span class="keyword">new</span> { Age = <span class="number">31</span> });
+
+<span class="comment">// Builder Pattern (Fluent API)</span>
+<span class="keyword">var</span> count = <span class="keyword">await</span> client.<span class="function">Collection</span>&lt;User&gt;(<span class="string">"users"</span>).<span class="function">Where</span>(<span class="string">"age"</span>, <span class="string">">"</span>, <span class="number">18</span>).<span class="function">CountAsync</span>();
+<span class="keyword">var</span> first = <span class="keyword">await</span> client.<span class="function">Collection</span>&lt;User&gt;(<span class="string">"users"</span>).<span class="function">FirstAsync</span>();
+
+<span class="comment">// View Management</span>
+<span class="keyword">await</span> client.<span class="function">CreateViewAsync</span>(<span class="string">"ActiveUsers"</span>, <span class="string">"return db.users.findall(u => u.active)"</span>);
+<span class="keyword">var</span> list = <span class="keyword">await</span> client.<span class="function">CallViewAsync</span>&lt;<span class="keyword">List</span>&lt;User&gt;&gt;(<span class="string">"ActiveUsers"</span>);
+<span class="keyword">var</span> filtered = <span class="keyword">await</span> client.<span class="function">CallViewAsync</span>&lt;<span class="keyword">List</span>&lt;User&gt;&gt;(<span class="string">"myview"</span>, <span class="keyword">new</span> { minAge = <span class="number">18</span> });
+
+<span class="comment">// Vault Storage</span>
+<span class="keyword">await</span> client.<span class="function">AddVaultAsync</span>(<span class="string">"MY_SECRET"</span>, <span class="string">"12345"</span>);</code></pre>
+            </section>
+
+            <!-- Python SDK -->
+            <section class="section" id="python-sdk">
+                <h2>Python SDK</h2>
+                <p>Interact with AxarDB programmatically from your Python scripts and services.</p>
+                <pre><code><span class="keyword">from</span> axardb <span class="keyword">import</span> AxarClient
+
+<span class="comment"># Initialize Client</span>
+client = <span class="function">AxarClient</span>(<span class="string">"http://localhost:5000"</span>, <span class="string">"unlocker"</span>, <span class="string">"unlocker"</span>)
+
+<span class="comment"># Insert Document</span>
+client.<span class="function">insert</span>(<span class="string">"users"</span>, {<span class="string">"name"</span>: <span class="string">"John"</span>, <span class="string">"age"</span>: <span class="number">30</span>})
+
+<span class="comment"># Query via Builder API</span>
+users = client.<span class="function">collection</span>(<span class="string">"users"</span>).<span class="function">where</span>(<span class="string">"age"</span>, <span class="string">">"</span>, <span class="number">20</span>).<span class="function">to_list</span>()
+
+<span class="comment"># Document Count</span>
+count = client.<span class="function">collection</span>(<span class="string">"users"</span>).<span class="function">count</span>()
+
+<span class="comment"># Delete Documents</span>
+client.<span class="function">collection</span>(<span class="string">"users"</span>).<span class="function">where</span>(<span class="string">"age"</span>, <span class="string">"<"</span>, <span class="number">18</span>).<span class="function">delete</span>()
+
+<span class="comment"># View Management</span>
+client.<span class="function">create_view</span>(<span class="string">"MyView"</span>, <span class="string">"return db.users.take(10)"</span>)
+res = client.<span class="function">call_view</span>(<span class="string">"MyView"</span>)
+res = client.<span class="function">call_view</span>(<span class="string">"MyView"</span>, {<span class="string">"minAge"</span>: <span class="number">18</span>})</code></pre>
+            </section>
+
+            <!-- CLI Tool -->
+            <section class="section" id="cli-tool">
+                <h2>CLI Tool</h2>
+                <p>AxarDB includes a Command Line Interface (CLI) tool for executing scripts, importing data, and running database commands directly from your terminal.</p>
+
+                <h3>Usage Examples</h3>
+                <pre><code><span class="comment"># Interactive query login</span>
+./AxarDB.Cli -s <span class="string">"db.users.count()"</span>
+
+<span class="comment"># Executing script from file</span>
+./AxarDB.Cli -f query.js
+
+<span class="comment"># Fully automated CI/CD mode with credentials and output file</span>
+./AxarDB.Cli -u admin -p pass -f query.js -o result.json
+
+<span class="comment"># List collections on the server</span>
+./AxarDB.Cli --show-collections
+
+<span class="comment"># Direct document insertion</span>
+./AxarDB.Cli --insert users <span class="string">"{\"name\":\"Alice\"}"</span></code></pre>
+
+                <div class="info-box">
+                    <strong>🌐 CORS Configuration:</strong><br>
+                    By default, AxarDB allows all origins (<code>*</code>). You can restrict allowed origins when starting the database server using the CLI parameter:
+                    <pre><code>dotnet run -- --cors "http://localhost:3000,http://example.com"</code></pre>
+                </div>
+            </section>
+
+            <!-- Benchmark Tool -->
+            <section class="section" id="benchmark">
+                <h2>Multi-Engine Benchmark Tool</h2>
+                <p>AxarDB comes with a Python-based benchmark runner (<code>compare.py</code>) to test database throughput (CRUD operations, indexing, and queries) against PostgreSQL, MariaDB, and MongoDB under the same workloads.</p>
+
+                <h3>Running the Benchmark</h3>
+                <pre><code>python compare.py</code></pre>
+
+                <h3>Technical Specifications</h3>
+                <ul>
+                    <li><strong>Metrics Measured:</strong> Single and Bulk Insert times, Index Creation, Count (COUNT), filtered Query/Range searches, record Updates, and Deletes.</li>
+                    <li><strong>Latency Tracing:</strong> Server-side execution times are captured via the <code>sysqueue</code> Stopwatch mechanism, excluding HTTP network payload overhead to measure clean database engine performance.</li>
+                    <li><strong>Timeout Configuration:</strong> To avoid cancellations during deep range searches or heavy bulk inserts, the benchmark script automatically raises the <code>queryTimeoutMinutes</code> in <code>sysconfig</code> to 30 minutes, and waits up to 300 seconds for queue jobs.</li>
+                    <li><strong>Report Generation:</strong> Generates a clean interactive HTML output report (<code>output.html</code>) with Chart.js line and bar charts tracking operation duration and total speedup comparisons.</li>
+                </ul>
+            </section>
+
             <!-- Utilities -->
             <section class="section" id="utilities">
                 <h2>Utility Functions</h2>
-                <pre><code><span class="comment">// Create unique ID (UUID)</span>
+                <pre><code><span class="comment">// Create unique ID (UUID v4)</span>
 <span class="keyword">var</span> id = <span class="function">guid</span>();
+
+<span class="comment">// Create unique ID (UUID v7) using current time</span>
+<span class="keyword">var</span> idV7 = <span class="function">guidv7</span>();
+
+<span class="comment">// Create unique ID (UUID v7) using specified datetime string</span>
+<span class="keyword">var</span> customIdV7 = <span class="function">guidv7</span>(<span class="string">"2024-01-15T10:30:00Z"</span>);
+
+<span class="comment">// Extract creation date from UUID v7</span>
+<span class="keyword">var</span> createdDate = <span class="function">guidv7CreatedAt</span>(idV7);
 
 <span class="comment">// Write log to console (server console and logs/)</span>
 console.<span class="function">log</span>(<span class="string">"Message"</span>);
@@ -1006,6 +1417,15 @@ console.<span class="function">log</span>(<span class="string">"Message"</span>)
 
 <span class="comment">// List existing collections</span>
 <span class="keyword">var</span> cols = <span class="function">showCollections</span>();
+
+<span class="comment">// Schedule background job</span>
+<span class="keyword">var</span> jobId = <span class="function">queue</span>(<span class="string">"db.logs.insert({ msg: @msg })"</span>, { msg: <span class="string">"Hello"</span> }, { priority: <span class="number">1</span> });
+
+<span class="comment">// Get list of indexes for a collection</span>
+<span class="keyword">var</span> indexes = <span class="function">getIndexes</span>(<span class="string">"users"</span>);
+
+<span class="comment">// Create alias for joins</span>
+<span class="keyword">var</span> userAlias = <span class="function">alias</span>(db.users, <span class="string">"u"</span>);
 
 <span class="comment">// Create SHA256 hash</span>
 <span class="keyword">var</span> hash = <span class="function">sha256</span>(<span class="string">"password"</span>);
@@ -1026,6 +1446,12 @@ console.<span class="function">log</span>(<span class="string">"Message"</span>)
 <span class="comment">// OpenAI compatible LLM Client</span>
 <span class="keyword">var</span> ai = <span class="function">openai</span>(url, token);
 
+<span class="comment">// Add system message to LLM Client</span>
+ai.<span class="function">addSysMsg</span>(<span class="string">"You are a helpful assistant"</span>);
+
+<span class="comment">// Send message to LLM Client</span>
+<span class="keyword">var</span> response = ai.<span class="function">msg</span>(<span class="string">"Hello"</span>, {}, <span class="keyword">null</span>);
+
 <span class="comment">// AES Encryption / Decryption</span>
 <span class="keyword">var</span> secret = <span class="function">encrypt</span>(<span class="string">"hello"</span>, <span class="string">"salt"</span>);
 <span class="keyword">var</span> plain = <span class="function">decrypt</span>(secret, <span class="string">"salt"</span>);
@@ -1038,7 +1464,9 @@ console.<span class="function">log</span>(<span class="string">"Message"</span>)
 <span class="keyword">var</span> later = <span class="function">addMinutes</span>(<span class="keyword">new</span> Date(), <span class="number">15</span>);
 <span class="keyword">var</span> hourLater = <span class="function">addHours</span>(<span class="keyword">new</span> Date(), <span class="number">1</span>);
 
-<span class="comment">// Converters</span>
+<span class="comment">// Converters & String Utilities</span>
+<span class="keyword">var</span> str = <span class="function">toString</span>(<span class="number">42</span>);
+<span class="keyword">var</span> parts = <span class="function">split</span>(<span class="string">"a,b,c"</span>, <span class="string">","</span>);
 <span class="keyword">var</span> b64 = <span class="function">toBase64</span>(<span class="string">"text"</span>);
 <span class="keyword">var</span> txt = <span class="function">fromBase64</span>(b64);
 <span class="keyword">var</span> num = <span class="function">toDecimal</span>(<span class="string">"10.5"</span>);
@@ -1046,7 +1474,7 @@ console.<span class="function">log</span>(<span class="string">"Message"</span>)
 
 <span class="comment">// Randoms</span>
 <span class="keyword">var</span> n = <span class="function">randomNumber</span>(<span class="number">1</span>, <span class="number">100</span>);
-<span class="keyword">var</span> d = <span class="function">randomDecimal</span>(<span class="number">0</span>, <span class="number">1</span>);</code></pre>
+<span class="keyword">var</span> d = <span class="function">randomDecimal</span>(<span class="string">"0.01"</span>, <span class="string">"99.99"</span>);</code></pre>
             </section>
 
         </div>

@@ -8,15 +8,14 @@ db.audit_logs.findall().delete();
 
 // 2. Configuration for Scale
 const SCALE = {
-    USERS: 100,      // 10k users
-    CATEGORIES: 5,    // 50 categories
-    PRODUCTS: 500,   // 50k products
-    ORDERS: 1000,    // 100k orders
-    REVIEWS: 1000    // 100k reviews
+    USERS: 100,      // 100 users
+    CATEGORIES: 5,   // 5 categories
+    PRODUCTS: 500,   // 500 products
+    ORDERS: 1000,    // 1000 orders
+    REVIEWS: 1000    // 1000 reviews
 };
-// Total ~2605 records. Adjust as needed for performance testing.
 
-// 3. Helper Functions
+// 3. Helper Functions (Utilizing new UUID v7 functions and standard JavaScript math)
 function getRandomInt(min, max) {
     return Math.floor(Math.random() * (max - min + 1)) + min;
 }
@@ -30,15 +29,7 @@ function getRandomDate(start, end) {
     return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime()));
 }
 
-function guid() {
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
-        var r = Math.random() * 16 | 0, v = c == 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
-}
-
 // 4. OpenAI Integration Example (Mock Setup)
-// This view demonstrates how to use OpenAI to enrich product data
 db.saveView("generateProductDesc", `
 // @access private
 var productName = @name;
@@ -51,14 +42,11 @@ var desc = llm.msg("Write a description for: " + productName, {}, "gpt-3.5-turbo
 return desc;
 `);
 
-// 5. Queue Integration Example
-// Queue a background job to 'process' a batch of orders (simulated)
+// 5. Queue Integration Example (using new UUID v7 generation for task queuing)
 function queueOrderProcessing(orderId) {
-    // This script will run in the background
     var script = `
         var order = db.orders.find(o => o._id == @id);
         if (order) {
-            // Simulate complex processing
             db.orders.update(o => o._id == @id, { 
                 processedAt: new Date(), 
                 status: 'Processed' 
@@ -69,7 +57,6 @@ function queueOrderProcessing(orderId) {
     // Queue with priority 1
     queue(script, { id: orderId }, { priority: 1 });
 }
-
 
 // 6. User Data Generation
 console.log("Generating " + SCALE.USERS + " Users...");
@@ -82,8 +69,10 @@ for (var i = 0; i < SCALE.USERS; i++) {
     var firstName = getRandomItem(firstNames);
     var lastName = getRandomItem(lastNames);
     var email = firstName.toLowerCase() + "." + lastName.toLowerCase() + i + "@" + getRandomItem(domains);
+    var randomRegDate = getRandomDate(new Date(2023, 0, 1), new Date());
 
     db.users.insert({
+        _id: guidv7(randomRegDate.toISOString()), // Use new guidv7(datetime) for time-ordering
         firstName: firstName,
         lastName: lastName,
         email: email,
@@ -91,7 +80,7 @@ for (var i = 0; i < SCALE.USERS; i++) {
         country: getRandomItem(countries),
         age: getRandomInt(18, 70),
         isActive: Math.random() > 0.1,
-        createdAt: getRandomDate(new Date(2023, 0, 1), new Date()),
+        createdAt: randomRegDate,
         isPremium: Math.random() > 0.8
     });
 }
@@ -122,8 +111,10 @@ var productNouns = ["Phone", "Laptop", "Shirt", "Shoes", "Table", "Chair", "Book
 for (var i = 0; i < SCALE.PRODUCTS; i++) {
     var category = getRandomItem(categoryList);
     var name = getRandomItem(productPrefixes) + " " + getRandomItem(productNouns) + " " + i;
+    var randomProdDate = getRandomDate(new Date(2023, 0, 1), new Date());
 
     db.products.insert({
+        _id: guidv7(randomProdDate.toISOString()), // Order products chronologically via v7 UUID
         name: name,
         description: "High quality " + name + " for your needs.",
         price: Math.round((Math.random() * 990 + 10) * 100) / 100,
@@ -132,10 +123,10 @@ for (var i = 0; i < SCALE.PRODUCTS; i++) {
         stock: getRandomInt(0, 500),
         rating: Math.round((Math.random() * 4 + 1) * 10) / 10,
         tags: [category.name.toLowerCase().split(' ')[0], "sale", "new"],
-        createdAt: getRandomDate(new Date(2023, 0, 1), new Date())
+        createdAt: randomProdDate
     });
 }
-var productList = db.products.findall().toList(); // Only take first few if too large, but we need random
+var productList = db.products.findall().toList();
 if (productList.length === 0) throw new Error("Product generation failed. productList is empty.");
 console.log("Products loaded: " + productList.length);
 
@@ -144,11 +135,8 @@ console.log("Generating " + SCALE.ORDERS + " Orders...");
 var orderStatuses = ["Pending", "Processing", "Shipped", "Delivered", "Cancelled"];
 
 for (var i = 0; i < SCALE.ORDERS; i++) {
-    var user = getRandomItem(userList); // fast random access
+    var user = getRandomItem(userList);
     if (!user) { console.log("Warning: null user at order " + i); continue; }
-    // Optimization: Don't fetch full product list if it's 50k keys. 
-    // Just pick random index if possible, but we need _id. 
-    // userList and productList are likely available in memory here.
 
     var itemCount = getRandomInt(1, 4);
     var items = [];
@@ -161,14 +149,16 @@ for (var i = 0; i < SCALE.ORDERS; i++) {
 
         items.push({
             productId: product._id,
-            productName: product.name, // Denormalize for read speed
+            productName: product.name, // Denormalized name
             quantity: quantity,
             price: product.price
         });
         totalAmount += product.price * quantity;
     }
 
+    var randomOrderDate = getRandomDate(new Date(2023, 0, 1), new Date());
     var orderId = db.orders.insert({
+        _id: guidv7(randomOrderDate.toISOString()), // Store order date metadata directly in primary key
         userId: user._id,
         userEmail: user.email,
         items: items,
@@ -181,11 +171,10 @@ for (var i = 0; i < SCALE.ORDERS; i++) {
             zipCode: getRandomInt(10000, 99999).toString()
         },
         paymentMethod: getRandomItem(["Credit Card", "PayPal", "Bank Transfer"]),
-        createdAt: getRandomDate(new Date(2023, 0, 1), new Date())
+        createdAt: randomOrderDate
     })._id;
 
-    // Queue Example Usage:
-    // Process 1% of orders via background queue to demonstrate functionality
+    // Process 1% of orders via background queue
     if (i % 100 === 0) {
         queueOrderProcessing(orderId);
     }
@@ -200,28 +189,26 @@ for (var i = 0; i < SCALE.REVIEWS; i++) {
     var product = getRandomItem(productList);
 
     if (!user || !product) {
-        if (!user) console.log("Warning: null user at review " + i);
-        if (!product) console.log("Warning: null product at review " + i);
         continue;
     }
 
+    var randomReviewDate = getRandomDate(new Date(2023, 0, 1), new Date());
     db.reviews.insert({
+        _id: guidv7(randomReviewDate.toISOString()), // Ordered by review timestamp
         userId: user._id,
         productId: product._id,
         rating: getRandomInt(1, 5),
         comment: getRandomItem(reviewTexts),
-        createdAt: getRandomDate(new Date(2023, 0, 1), new Date())
+        createdAt: randomReviewDate
     });
 }
 
-// 11. Views & Scripts (Updated)
-
-// Public View: Search Products
+// 11. Views & Scripts
 db.saveView("searchProducts", `
 // @access public
 var keyword = @keyword;
 if (!keyword) return [];
-// Case-insensitive search
+// Substring search with AxarDB case-insensitive String.prototype.contains
 return db.products.findall(p => p.name.contains(keyword)).toList();
 `);
 
@@ -235,7 +222,7 @@ var llm = openai("https://api.openai.com/v1", token);
 return llm.msg(question, {}, "gpt-3.5-turbo");
 `);
 
-// 13. [NEW] Bulk Collections Example (JSONL Storage for Lookup Tables)
+// 13. Bulk Collections Example (JSONL Storage for Lookup Tables)
 console.log("Seeding Static Bulk Lookup Tables...");
 bulk.taxRates.insert([
     { country: "TR", rate: 0.20, category: "Standard" },
@@ -244,18 +231,22 @@ bulk.taxRates.insert([
 ]);
 console.log("Bulk Collection (taxRates) Count: " + bulk.taxRates.findall().count());
 
-// 14. [NEW] Memory Collections Example (TTL In-Memory Temporary Storage)
+// 14. Memory Collections Example (TTL In-Memory Temporary Storage)
 console.log("Seeding Temporary Memory Cache & Sessions...");
 memory.activeCarts.insert({ cartId: "cart_999", userId: userList[0]._id, items: ["prod_1", "prod_2"] }, 0.5); // 30 mins TTL
 memory.activeCarts.insert({ cartId: "cart_888", userId: userList[1]._id, items: ["prod_3"] }); // default 1 hour TTL
 console.log("Active Memory Carts Count: " + memory.activeCarts.findall().count());
 
-// 15. [NEW] Pagination Example (Skip & Take)
+// 15. Pagination & Date Query Verification (Using the new guidv7CreatedAt utility)
 console.log("Testing Pagination with skip(n)...");
 var firstFive = db.products.findall().take(5).toList();
 var pageTwo = db.products.findall().skip(5).take(5).toList();
 console.log("Page 1 (first 5) sample: " + (firstFive[0] ? firstFive[0].name : "None"));
-console.log("Page 2 (next 5) sample: " + (pageTwo[0] ? pageTwo[0].name : "None"));
+
+if (firstFive[0]) {
+    var extractedTime = guidv7CreatedAt(firstFive[0]._id);
+    console.log("Extracted Product Creation Time from UUID v7: " + extractedTime);
+}
 
 console.log("Seeding Complete!");
 return {
@@ -266,5 +257,5 @@ return {
         orders: db.orders.findall().count(),
         reviews: db.reviews.findall().count()
     },
-    message: "Database hydrated with ~" + (SCALE.USERS + SCALE.PRODUCTS + SCALE.ORDERS + SCALE.REVIEWS) + " records."
+    message: "Database hydrated with time-ordered UUID v7 records."
 };

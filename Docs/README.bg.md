@@ -22,11 +22,22 @@
 
 | Характеристика | Описание |
 |:---|:---|
-| **📜 JavaScript заявки** | Пълен JS синтаксис: `db.users.findall(x => x.active).toList()`. Поддържа нови разширения като `count()` и `distinct()` както за ResultSets, така и за Native масиви. |
+| **📜 JavaScript заявки** | Пълен JS синтаксис: `db.users.findall(x => x.active)`. Поддържа нови разширения като `count()` и `distinct()` както за ResultSets, така и за Native масиви. |
 | **⚡ Висока производителност** | Съхранение в паметта с `ConcurrentDictionary`, мързеливо оценяване (Lazy Evaluation) чрез PLINQ и строго ограничено динамично кеширане в RAM паметта до 40%. |
 | **📄 CSV Двигател** | Двупосочна поддръжка на CSV. Преобразувайте текст в колекции или колекции в CSV чрез `csv(input)`. |
-| **🛡️ Сигурност** | Basic Auth (поддържа SHA256 хеш) & **Защита от инжекции**. |
+| **🛡️ Сигурност** | Basic Auth (поддържа SHA256 хеш), **Защита от инжекции** и защита на резервирани `sys` колекции. |
 | **🛠️ Инструменти** | Вградени помощни функции: `md5`, `sha256`, `encrypt`, `random`, `base64`. |
+
+---
+
+## ⚙️ Конфигурация
+
+Настройките на сървъра се съхраняват в системната колекция `sysconfig`. Промените на `memoryLimitPercentage`, `bulkStoreMaxCacheBytes`, `maxRecursionDepth`, `queryTimeoutMinutes` и `queuePollIntervalSeconds` влизат в сила след рестартиране. Имената на колекции с префикс `sys` са резервирани за вътрешната инфраструктура.
+
+```javascript
+// Актуализиране на конфигурацията (изисква рестартиране)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 

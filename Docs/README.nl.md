@@ -25,8 +25,19 @@
 | **📜 JavaScript Queries** | Gebruik volledige JS syntax: `db.users.findall(x => x.active).toList()`. Ondersteunt nieuwe functies zoals `count()` en `distinct()` op zowel ResultSets als Native Arrays. |
 | **⚡ Hoge Prestaties** | In-memory opslag met `ConcurrentDictionary`, Luie Evaluatie (Lazy Evaluation) via PLINQ en een strikte dynamische cachelimiet van 40% RAM. |
 | **📄 CSV Engine** | Bidirectionele robuuste CSV-ondersteuning. Converteer tekst naar collecties of collecties naar CSV via `csv(input)`. |
-| **🛡️ Veilig** | Basic Auth (ondersteunt SHA256-hash) & **Injectie Preventie**. |
+| **🛡️ Veilig** | Basic Auth (ondersteunt SHA256-hash), **Injectie Preventie** & Bescherming van gereserveerde `sys` collecties. |
 | **🛠️ Hulpfuncties** | Ingebouwde functies: `md5`, `sha256`, `encrypt`, `random`, `base64`. |
+
+---
+
+## ⚙️ Configuratie
+
+Serverinstellingen worden opgeslagen in de `sysconfig` systeemcollectie. Wijzigingen aan `memoryLimitPercentage`, `bulkStoreMaxCacheBytes`, `maxRecursionDepth`, `queryTimeoutMinutes` en `queuePollIntervalSeconds` worden pas actief na een herstart. Collectienamen met het voorvoegsel `sys` zijn gereserveerd voor interne infrastructuur.
+
+```javascript
+// Configuratie bijwerken (herstart vereist)
+db.sysconfig.update(x => true, { queryTimeoutMinutes: 15 });
+```
 
 ---
 
