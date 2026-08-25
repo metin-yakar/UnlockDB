@@ -1,9 +1,11 @@
 [Unit]
-Description=AxarDB Daily Automated Update Check
-After=network.target network-online.target
+Description=AxarDB Daily Release Auto-Updater
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=/opt/axardb/Update/debian/update.sh --dir /opt/axardb --service axardb
-StandardOutput=append:/var/log/axardb-update.log
-StandardError=append:/var/log/axardb-update.log
+WorkingDirectory=/opt/axardb
+ExecStart=/bin/bash /opt/axardb/Update/debian/update.sh --dir /opt/axardb --service axardb.service
+StandardOutput=journal+console
+StandardError=journal+console

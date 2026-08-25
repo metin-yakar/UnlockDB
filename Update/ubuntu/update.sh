@@ -1,24 +1,30 @@
 #!/usr/bin/env bash
 #
-# AxarDB Automatic Update Script for Ubuntu
-# Checks GitHub Releases, downloads latest binaries, safely updates the instance
-# and guarantees that existing database data and collections are never deleted.
+# AxarDB Automatic Release Update Script for Ubuntu
+# Downloads precompiled release binaries directly from GitHub Releases,
+# safely updates the application files, and preserves all user database data.
 #
 
 set -euo pipefail
 
 # Configuration defaults
-REPO_OWNER="metin-yakar"
-REPO_NAME="AxarDB"
-SERVICE_NAME="axardb"
-CHECK_ONLY=0
-FORCE_UPDATE=0
-INSTALL_DIR=""
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+APP_DIR="${SCRIPT_DIR}"
+LOG_FILE="/var/log/axardb-update.log"
+GITHUB_REPO="${AXARDB_REPO:-metin-yakar/AxarDB}"
+SERVICE_NAME="axardb.service"
+UPDATE_SERVICE="axardb-update.service"
+UPDATE_TIMER="axardb-update.timer"
+TEMP_DIR="/tmp/axardb_update"
+CHECK_ONLY=false
+FORCE_UPDATE=false
 
 log() {
-    local level="$1"
-    shift
-    echo "[$(date '+%Y-%m-%d %H:%M:%S')] [$level] $*"
+    local msg="[$(date '+%Y-%m-%d %H:%M:%S')] $1"
+    echo "$msg"
+    if [ -w "$(dirname "$LOG_FILE")" ] 2>/dev/null || [ "$EUID" -eq 0 ]; then
+        echo "$msg" >> "$LOG_FILE" 2>/dev/null || true
+    fi
 }
 
 usage() {
@@ -26,9 +32,9 @@ usage() {
 Usage: $0 [OPTIONS]
 
 Options:
-  -d, --dir DIR          Set AxarDB installation directory (default: /opt/axardb or detected)
-  -s, --service NAME     Set systemd service name (default: axardb)
-  -c, --check            Check for update availability without installing
+  -d, --dir DIR          Set AxarDB installation directory (default: auto-detected)
+  -s, --service NAME     Set systemd service name (default: axardb.service)
+  -c, --check            Check for update availability without applying changes
   -f, --force            Force update even if version is already up-to-date
   -h, --help             Display this help message
 EOF
@@ -39,207 +45,248 @@ EOF
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -d|--dir)
-            INSTALL_DIR="$2"
+            APP_DIR="$2"
             shift 2
             ;;
         -s|--service)
             SERVICE_NAME="$2"
+            if [[ "$SERVICE_NAME" != *.service ]]; then
+                SERVICE_NAME="${SERVICE_NAME}.service"
+            fi
             shift 2
             ;;
         -c|--check)
-            CHECK_ONLY=1
+            CHECK_ONLY=true
             shift
             ;;
         -f|--force)
-            FORCE_UPDATE=1
+            FORCE_UPDATE=true
             shift
             ;;
         -h|--help)
             usage
             ;;
         *)
-            log "ERROR" "Unknown argument: $1"
+            log "ERROR: Unknown argument: $1"
             usage
             ;;
     esac
 done
 
-# Resolve installation directory
-if [[ -z "$INSTALL_DIR" ]]; then
-    if [[ -f "./AxarDB.dll" || -f "./AxarDB" ]]; then
-        INSTALL_DIR="$(pwd)"
-    elif [[ -f "../AxarDB.dll" || -f "../AxarDB" ]]; then
-        INSTALL_DIR="$(cd .. && pwd)"
+# Auto-detect installation directory if not explicitly provided
+if [[ "$APP_DIR" == "$SCRIPT_DIR" ]]; then
+    if [[ -f "$SCRIPT_DIR/AxarDB" || -f "$SCRIPT_DIR/AxarDB.dll" ]]; then
+        APP_DIR="$SCRIPT_DIR"
+    elif [[ -f "$(dirname "$SCRIPT_DIR")/AxarDB" || -f "$(dirname "$SCRIPT_DIR")/AxarDB.dll" ]]; then
+        APP_DIR="$(cd "$(dirname "$SCRIPT_DIR")" && pwd)"
     elif [[ -d "/opt/axardb" ]]; then
-        INSTALL_DIR="/opt/axardb"
-    else
-        INSTALL_DIR="$(pwd)"
+        APP_DIR="/opt/axardb"
     fi
 fi
 
-mkdir -p "$INSTALL_DIR"
-INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd)"
-log "INFO" "Target installation directory: $INSTALL_DIR"
+APP_DIR="$(cd "$APP_DIR" && pwd)"
+SCRIPT_PATH="$(cd "$SCRIPT_DIR" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+VERSION_FILE="${APP_DIR}/.version"
+LATEST_DOWNLOAD_URL="https://github.com/${GITHUB_REPO}/releases/latest/download/AxarDB-debian.zip"
+API_LATEST_URL="https://api.github.com/repos/${GITHUB_REPO}/releases/latest"
 
-# Check dependencies
-for cmd in curl unzip jq; do
-    if ! command -v "$cmd" &>/dev/null; then
-        log "WARN" "Command '$cmd' not found. Installing via apt-get..."
-        if command -v apt-get &>/dev/null; then
+# ==============================================================================
+# Auto Self-Registration: Daily (03:00) systemd timer configuration
+# ==============================================================================
+ensure_scheduled_task() {
+    if ! command -v systemctl >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [ "$EUID" -ne 0 ]; then
+        return 0
+    fi
+
+    local timer_path="/etc/systemd/system/${UPDATE_TIMER}"
+    local service_path="/etc/systemd/system/${UPDATE_SERVICE}"
+
+    if [ -f "$timer_path" ] && systemctl is-active --quiet "$UPDATE_TIMER" 2>/dev/null; then
+        return 0
+    fi
+
+    log "Configuring automated daily update timer (03:00)..."
+
+    cat << EOF > "$service_path"
+[Unit]
+Description=AxarDB Daily Release Auto-Updater
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=${APP_DIR}
+ExecStart=/bin/bash ${SCRIPT_PATH} --dir ${APP_DIR} --service ${SERVICE_NAME}
+StandardOutput=journal+console
+StandardError=journal+console
+EOF
+
+    cat << EOF > "$timer_path"
+[Unit]
+Description=AxarDB Daily Auto-Update Timer (03:00)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+Unit=${UPDATE_SERVICE}
+
+[Install]
+WantedBy=timers.target
+EOF
+
+    systemctl daemon-reload
+    systemctl enable --now "$UPDATE_TIMER" 2>/dev/null || true
+    log "Daily update timer successfully registered and activated (${UPDATE_TIMER} at 03:00)."
+}
+
+# 1. Ensure scheduled background task is registered when running as root
+ensure_scheduled_task
+
+log "=== AxarDB Release Update Task Started ==="
+log "Working Directory: ${APP_DIR}"
+
+# 2. Retrieve latest release tag from GitHub API
+log "Fetching latest release info from ${API_LATEST_URL}..."
+RELEASE_JSON=$(curl -sL -H "User-Agent: AxarDB-Updater" "${API_LATEST_URL}" || echo "")
+
+LATEST_TAG=""
+if [ -n "$RELEASE_JSON" ]; then
+    LATEST_TAG=$(echo "$RELEASE_JSON" | grep -o '"tag_name": *"[^"]*"' | head -n 1 | cut -d'"' -f4 || echo "")
+fi
+
+if [ -z "$LATEST_TAG" ]; then
+    log "WARNING: Could not parse tag from GitHub API, falling back to direct latest download."
+    LATEST_TAG="latest"
+fi
+
+log "Target release tag: ${LATEST_TAG}"
+
+# 3. Check currently installed version
+CURRENT_TAG=""
+if [ -f "$VERSION_FILE" ]; then
+    CURRENT_TAG=$(cat "$VERSION_FILE" | tr -d '[:space:]')
+elif [ -f "${APP_DIR}/version.txt" ]; then
+    CURRENT_TAG=$(cat "${APP_DIR}/version.txt" | tr -d '[:space:]')
+fi
+
+log "Current installed version: ${CURRENT_TAG:-none}"
+
+if [ "$CHECK_ONLY" = true ]; then
+    if [ "$CURRENT_TAG" = "$LATEST_TAG" ] && [ "$LATEST_TAG" != "latest" ]; then
+        log "AxarDB is currently up-to-date (${CURRENT_TAG})."
+    else
+        log "Update available: '${CURRENT_TAG:-none}' -> '${LATEST_TAG}'."
+    fi
+    log "=== AxarDB Check Finished ==="
+    exit 0
+fi
+
+# If already up-to-date and not forced: do nothing, do NOT restart service
+if [ "$CURRENT_TAG" = "$LATEST_TAG" ] && [ "$LATEST_TAG" != "latest" ] && [ "$FORCE_UPDATE" = false ]; then
+    log "AxarDB is already up-to-date (Version: ${CURRENT_TAG}). No action needed. Service not restarted."
+    log "=== AxarDB Release Update Task Finished ==="
+    exit 0
+fi
+
+log "New version detected or forced update requested: '${CURRENT_TAG:-none}' -> '${LATEST_TAG}'..."
+
+# Ensure prerequisite tools
+for cmd in curl unzip rsync; do
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+        if [ "$EUID" -eq 0 ] && command -v apt-get >/dev/null 2>&1; then
+            log "Installing missing prerequisite '$cmd'..."
             apt-get update -qq && apt-get install -y -qq "$cmd"
         else
-            log "ERROR" "Missing prerequisite '$cmd'. Please install it first."
+            log "ERROR: Prerequisite tool '$cmd' is required but not installed."
             exit 1
         fi
     fi
 done
 
-# Read current version
-VERSION_FILE="$INSTALL_DIR/version.txt"
-CURRENT_VERSION="none"
-if [[ -f "$VERSION_FILE" ]]; then
-    CURRENT_VERSION="$(cat "$VERSION_FILE" | tr -d '[:space:]')"
-fi
-log "INFO" "Current installed version: $CURRENT_VERSION"
+# 4. Prepare temporary directory and download release bundle
+rm -rf "$TEMP_DIR"
+mkdir -p "$TEMP_DIR"
 
-# Fetch latest release info from GitHub API
-API_URL="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}/releases/latest"
-log "INFO" "Checking latest release from: $API_URL"
+log "Downloading latest package: ${LATEST_DOWNLOAD_URL}..."
+curl -sL -H "User-Agent: AxarDB-Updater" "$LATEST_DOWNLOAD_URL" -o "$TEMP_DIR/AxarDB-debian.zip"
 
-RELEASE_JSON=$(curl -sSL -H "User-Agent: AxarDB-Updater-Ubuntu" -H "Accept: application/vnd.github.v3+json" "$API_URL")
-
-if [[ -z "$RELEASE_JSON" ]] || echo "$RELEASE_JSON" | grep -q '"message": "Not Found"'; then
-    log "ERROR" "Could not fetch release metadata from GitHub repository."
+if [ ! -s "$TEMP_DIR/AxarDB-debian.zip" ]; then
+    log "ERROR: Downloaded package is empty or failed to download."
+    rm -rf "$TEMP_DIR"
     exit 1
 fi
 
-LATEST_TAG=$(echo "$RELEASE_JSON" | jq -r '.tag_name // empty')
-if [[ -z "$LATEST_TAG" ]]; then
-    log "ERROR" "Failed to parse latest tag from GitHub response."
-    exit 1
+log "Extracting release package..."
+unzip -q -o "$TEMP_DIR/AxarDB-debian.zip" -d "$TEMP_DIR/extracted"
+
+SOURCE_DIR="$TEMP_DIR/extracted/debian"
+if [ ! -d "$SOURCE_DIR" ]; then
+    SOURCE_DIR="$TEMP_DIR/extracted"
 fi
 
-log "INFO" "Latest available release: $LATEST_TAG"
+# 5. Safely sync application binaries
+# PRESERVED DIRECTORIES AND FILES:
+# - Data/ / data/ (Database collections and documents)
+# - Bulk/ / bulk/ (JSONL Bulk store tables)
+# - Views/ / views/ (User stored query scripts)
+# - Triggers/ / triggers/ (User trigger event scripts)
+# - backup_queries/ (Query recovery backups)
+# - uploads/ / Uploads/ (Uploaded user assets)
+# - *logs/ / *log/ / logs/ (All log directories)
+# - appsettings.json (Host-specific configuration)
+# - .version (Internal version tracking)
+log "Syncing application binaries -> ${APP_DIR} (Preserving Data, Bulk, Views, Triggers, backup_queries, uploads, logs, and appsettings.json)..."
 
-# Check if update is required
-if [[ "$CURRENT_VERSION" == "$LATEST_TAG" && $FORCE_UPDATE -eq 0 ]]; then
-    log "INFO" "AxarDB is already up-to-date ($CURRENT_VERSION). No update needed."
-    exit 0
+rsync -av --exclude='Data/' \
+          --exclude='data/' \
+          --exclude='Bulk/' \
+          --exclude='bulk/' \
+          --exclude='Views/' \
+          --exclude='views/' \
+          --exclude='Triggers/' \
+          --exclude='triggers/' \
+          --exclude='backup_queries/' \
+          --exclude='uploads/' \
+          --exclude='Uploads/' \
+          --exclude='*logs/' \
+          --exclude='*log/' \
+          --exclude='logs/' \
+          --exclude='appsettings.json' \
+          --exclude='.version' \
+          "$SOURCE_DIR/" "$APP_DIR/"
+
+# 6. Set permissions and update version file
+if [ -f "$APP_DIR/AxarDB" ]; then
+    chmod +x "$APP_DIR/AxarDB"
 fi
-
-if [[ $CHECK_ONLY -eq 1 ]]; then
-    log "INFO" "Update is available: $CURRENT_VERSION -> $LATEST_TAG"
-    exit 0
-fi
-
-log "INFO" "Starting update procedure: $CURRENT_VERSION -> $LATEST_TAG"
-
-# Locate release asset URL (AxarDB-debian.zip, ubuntu, or linux-x64)
-DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("ubuntu|debian|linux"; "i")) | .browser_download_url' | head -n 1)
-
-if [[ -z "$DOWNLOAD_URL" ]]; then
-    DOWNLOAD_URL=$(echo "$RELEASE_JSON" | jq -r '.assets[] | select(.name | test("\\.zip$")) | .browser_download_url' | head -n 1)
-fi
-
-if [[ -z "$DOWNLOAD_URL" ]]; then
-    log "ERROR" "No matching Linux release zip asset found in release $LATEST_TAG"
-    exit 1
-fi
-
-ASSET_NAME=$(basename "$DOWNLOAD_URL")
-log "INFO" "Downloading release asset: $ASSET_NAME"
-
-# Temporary workspace
-STAGING_DIR="$(mktemp -d /tmp/axardb_update_XXXXXX)"
-ZIP_PATH="$STAGING_DIR/$ASSET_NAME"
-EXTRACT_DIR="$STAGING_DIR/extracted"
-mkdir -p "$EXTRACT_DIR"
-
-cleanup() {
-    rm -rf "$STAGING_DIR"
-}
-trap cleanup EXIT
-
-# Download package
-curl -sSL -H "User-Agent: AxarDB-Updater-Ubuntu" -o "$ZIP_PATH" "$DOWNLOAD_URL"
-
-# Extract package
-log "INFO" "Extracting release package..."
-unzip -q -o "$ZIP_PATH" -d "$EXTRACT_DIR"
-
-# Resolve nested subfolder if present (e.g. 'debian/' or 'ubuntu/')
-SOURCE_DIR="$EXTRACT_DIR"
-for sub in "ubuntu" "debian"; do
-    if [[ -d "$EXTRACT_DIR/$sub" && -f "$EXTRACT_DIR/$sub/AxarDB.dll" ]]; then
-        SOURCE_DIR="$EXTRACT_DIR/$sub"
-        break
-    fi
-done
-
-# Stop systemd service if running
-SERVICE_WAS_RUNNING=0
-if command -v systemctl &>/dev/null; then
-    if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
-        log "INFO" "Stopping systemd service '$SERVICE_NAME'..."
-        systemctl stop "$SERVICE_NAME"
-        SERVICE_WAS_RUNNING=1
-    fi
-fi
-
-# CRITICAL: Safe Copy Routine (Strict Data Preservation)
-# Protected folders that MUST NOT be deleted or overwritten with empty directories:
-PROTECTED_ITEMS=("Data" "Bulk" "Views" "Triggers" "backup_queries" "request_logs" "error_logs" "debug_logs" "view_logs" "trigger_logs")
-
-is_protected() {
-    local item="$1"
-    for p in "${PROTECTED_ITEMS[@]}"; do
-        if [[ "$item" == "$p" ]]; then
-            return 0
-        fi
-    done
-    return 1
-}
-
-log "INFO" "Updating binaries and web assets while preserving database data..."
-
-for item in "$SOURCE_DIR"/*; do
-    [ -e "$item" ] || continue
-    name=$(basename "$item")
-
-    if [[ -d "$item" ]]; then
-        if is_protected "$name" && [[ -d "$INSTALL_DIR/$name" ]]; then
-            log "INFO" "Preserving existing data directory: $name"
-            continue
-        fi
-        cp -rf "$item" "$INSTALL_DIR/"
-    else
-        # If user customized appsettings.json, preserve it
-        if [[ "$name" == "appsettings.json" && -f "$INSTALL_DIR/$name" ]]; then
-            log "INFO" "Preserving existing appsettings.json configuration file."
-            continue
-        fi
-        cp -f "$item" "$INSTALL_DIR/"
-    fi
-done
-
-# Ensure execute permissions on binary
-if [[ -f "$INSTALL_DIR/AxarDB" ]]; then
-    chmod +x "$INSTALL_DIR/AxarDB"
-fi
-
-# Update version file
 echo "$LATEST_TAG" > "$VERSION_FILE"
-log "INFO" "Updated version file to $LATEST_TAG."
 
-# Restart systemd service if it was running
-if [[ $SERVICE_WAS_RUNNING -eq 1 ]]; then
-    log "INFO" "Restarting systemd service '$SERVICE_NAME'..."
-    systemctl start "$SERVICE_NAME"
-    if systemctl is-active --quiet "$SERVICE_NAME"; then
-        log "INFO" "Service '$SERVICE_NAME' started successfully."
+# 7. Restart AxarDB service ONLY when an update has been applied
+if command -v systemctl >/dev/null 2>&1; then
+    if systemctl list-unit-files "$SERVICE_NAME" >/dev/null 2>&1; then
+        log "Update applied. Restarting service: ${SERVICE_NAME}..."
+        systemctl restart "$SERVICE_NAME" || true
+
+        # 8. Verify service health
+        sleep 2
+        if systemctl is-active --quiet "$SERVICE_NAME" 2>/dev/null; then
+            log "SUCCESS: AxarDB updated to ${LATEST_TAG} and service is active."
+        else
+            log "WARNING: AxarDB service failed to restart or is inactive. Inspecting journalctl logs..."
+            journalctl -u "$SERVICE_NAME" -n 20 --no-pager 2>/dev/null | tee -a "$LOG_FILE" || true
+        fi
     else
-        log "WARN" "Service '$SERVICE_NAME' may have failed to start. Check 'systemctl status $SERVICE_NAME'."
+        log "SUCCESS: AxarDB updated to ${LATEST_TAG} (Service '${SERVICE_NAME}' not registered in systemd)."
     fi
+else
+    log "SUCCESS: AxarDB updated to ${LATEST_TAG}."
 fi
 
-log "INFO" "AxarDB update to $LATEST_TAG completed successfully without data loss."
+# 9. Cleanup temporary files
+rm -rf "$TEMP_DIR"
+
+log "=== AxarDB Release Update Task Finished ==="

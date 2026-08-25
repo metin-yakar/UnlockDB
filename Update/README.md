@@ -19,13 +19,15 @@ Automated, secure, and zero-data-loss update scripts for **AxarDB** across popul
 
 AxarDB update scripts are built with strict safeguards to ensure that **database data, configuration, and logs are never deleted or overwritten during updates**:
 
-1. **Database Documents & Collections (`Data/`)**: All JSON collections and indexes (`idx_*.json`) remain intact.
-2. **Bulk Storage (`Bulk/`)**: High-performance JSONL static datasets are strictly preserved.
-3. **Stored Views & Triggers (`Views/`, `Triggers/`)**: All server-side JavaScript queries and event triggers remain unchanged.
+1. **Database Documents & Collections (`Data/`, `data/`)**: All JSON collections and indexes (`idx_*.json`) remain intact.
+2. **Bulk Storage (`Bulk/`, `bulk/`)**: High-performance JSONL static datasets are strictly preserved.
+3. **Stored Views & Triggers (`Views/`, `views/`, `Triggers/`, `triggers/`)**: All server-side JavaScript queries and event triggers remain unchanged.
 4. **Data Recovery Logs (`backup_queries/`)**: Fail-safe reverse queries are kept safe.
-5. **System & Access Logs (`*_logs/`)**: Request logs, error logs, and audit logs are preserved.
-6. **Configuration**: Existing `appsettings.json` and internal `sysconfig` values are preserved.
-7. **Docker Storage**: Host volume mounts (e.g. `./data:/app/data`) and named volumes persist across container recreations.
+5. **Uploaded Assets (`uploads/`, `Uploads/`)**: All uploaded user files and assets remain untouched.
+6. **System & Access Logs (`*logs/`, `*log/`, `logs/`)**: Request logs, error logs, debug logs, and audit logs are preserved.
+7. **Configuration (`appsettings.json`)**: Host-specific configuration is never overwritten.
+8. **Version File (`.version`)**: Internal version tracker is updated upon successful deployment.
+9. **Docker Storage**: Host volume mounts (e.g. `./data:/app/data`) and named volumes persist across container recreations.
 
 Only runtime binaries, assemblies, and public static assets (`wwwroot/`, `Docs/`) are updated.
 
@@ -37,8 +39,8 @@ Before initiating any download or restarting services, the scripts inspect the c
 
 - **Standalone Binaries (Windows, Debian, Ubuntu)**:
   - Release Source: [AxarDB GitHub Releases](https://github.com/metin-yakar/AxarDB/releases)
-  - API Endpoint: `https://api.github.com/repos/metin-yakar/AxarDB/releases/latest`
-  - If local version equals latest remote tag, the script exits immediately with zero downtime.
+  - Packages: Direct download of precompiled release archives (`AxarDB-debian.zip`, `AxarDB-windows.zip`).
+  - If local version equals latest remote tag, the script exits immediately with zero downtime and does not restart the service.
 - **Docker**:
   - Pulls image manifests from Docker Hub.
   - If the image digest has not changed, running containers are left untouched.
@@ -47,10 +49,10 @@ Before initiating any download or restarting services, the scripts inspect the c
 
 ## ⏰ Daily Scheduled Updates
 
-Each environment includes a dedicated scheduler script to run update checks once a day at a user-defined time (default: `03:00 AM`):
+Each environment includes automated scheduling to run update checks once a day at a user-defined time (default: `03:00 AM`):
 
-- **Windows**: `schedule-task.ps1` registers a task in Windows Task Scheduler.
-- **Debian / Ubuntu**: `schedule-cron.sh` configures `/etc/cron.d/axardb-update` or enables `systemd.timer`.
+- **Debian / Ubuntu**: Running `update.sh` auto-registers `axardb-update.timer` (03:00) and `axardb-update.service`. `schedule-cron.sh` is also available for cron or timer configuration.
+- **Windows**: Running `update.ps1` as Administrator auto-registers the `AxarDB-DailyUpdate` task at 03:00. `schedule-task.ps1` is also available for custom schedules.
 - **Docker Host**: `schedule-cron.sh` (Linux) or `schedule-task.ps1` (Windows).
 
 ---

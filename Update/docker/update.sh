@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# AxarDB Docker Automatic Update Script
+# AxarDB Docker Automatic Release Update Script
 # Updates AxarDB Docker containers (Docker Compose & Standalone) to the latest Docker Hub image
 # while guaranteeing all database data and mounted volumes remain completely preserved.
 #

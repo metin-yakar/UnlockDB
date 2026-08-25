@@ -12,7 +12,7 @@ TIME_HOUR="03"
 TIME_MIN="00"
 METHOD="cron"
 INSTALL_DIR="/opt/axardb"
-SERVICE_NAME="axardb"
+SERVICE_NAME="axardb.service"
 REMOVE=0
 
 log() {
@@ -29,7 +29,7 @@ Options:
   -t, --time HH:MM       Daily execution time in 24h format (default: 03:00)
   -m, --method METHOD    Scheduling method: 'cron' or 'timer' (default: cron)
   -d, --dir DIR          Target AxarDB installation directory (default: /opt/axardb)
-  -s, --service NAME     Systemd service name (default: axardb)
+  -s, --service NAME     Systemd service name (default: axardb.service)
   -r, --remove           Remove scheduled update job
   -h, --help             Display this help message
 EOF
@@ -58,6 +58,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -s|--service)
             SERVICE_NAME="$2"
+            if [[ "$SERVICE_NAME" != *.service ]]; then
+                SERVICE_NAME="${SERVICE_NAME}.service"
+            fi
             shift 2
             ;;
         -r|--remove)
@@ -109,23 +112,26 @@ elif [[ "$METHOD" == "timer" ]]; then
 
     cat > "$SERVICE_DEST" <<EOF
 [Unit]
-Description=AxarDB Daily Automated Update Check
-After=network.target network-online.target
+Description=AxarDB Daily Release Auto-Updater
+After=network-online.target
+Wants=network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=$UPDATE_SCRIPT --dir "$INSTALL_DIR" --service "$SERVICE_NAME"
-StandardOutput=append:/var/log/axardb-update.log
-StandardError=append:/var/log/axardb-update.log
+WorkingDirectory=$INSTALL_DIR
+ExecStart=/bin/bash $UPDATE_SCRIPT --dir "$INSTALL_DIR" --service "$SERVICE_NAME"
+StandardOutput=journal+console
+StandardError=journal+console
 EOF
 
     cat > "$TIMER_DEST" <<EOF
 [Unit]
-Description=AxarDB Daily Update Timer
+Description=AxarDB Daily Auto-Update Timer (03:00)
 
 [Timer]
 OnCalendar=*-*-* $TIME_HOUR:$TIME_MIN:00
 Persistent=true
+Unit=axardb-update.service
 
 [Install]
 WantedBy=timers.target
