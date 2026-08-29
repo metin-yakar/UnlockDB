@@ -4,16 +4,19 @@
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <Version>1.0.1</Version>
+    <Version>1.2.0</Version>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Remove="SDKs\**" />
     <Compile Remove="TestData\**" />
+    <Compile Remove="Update\**" />
     <Content Remove="SDKs\**" />
     <Content Remove="TestData\**" />
+    <Content Remove="Update\**" />
     <EmbeddedResource Remove="SDKs\**" />
     <EmbeddedResource Remove="TestData\**" />
+    <EmbeddedResource Remove="Update\**" />
     <None Remove="SDKs\**" />
     <None Remove="TestData\**" />
   </ItemGroup>
