@@ -7,7 +7,8 @@ WORKDIR /src
 RUN dotnet build "AxarDB.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "AxarDB.csproj" -c Release -o /app/publish
+ARG APP_VERSION=1.2.0
+RUN dotnet publish "AxarDB.csproj" -c Release -p:Version=$APP_VERSION -p:FileVersion=$APP_VERSION -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS final
 WORKDIR /app

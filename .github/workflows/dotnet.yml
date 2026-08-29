@@ -14,11 +14,48 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Generate version (YYMMDD + run)
+      - name: Calculate next version
+        id: versioning
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          DATE_CODE=$(date +'%y%m%d')
-          echo "TAG_VERSION=v1.0.$DATE_CODE.${GITHUB_RUN_NUMBER}" >> $GITHUB_ENV
-          echo "FILE_VERSION=1.0.$DATE_CODE" >> $GITHUB_ENV
+          LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
+          LATEST_TAG="${LATEST_TAG#v}"
+
+          if [[ "$LATEST_TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+
+            if (( MAJOR < 1 || (MAJOR == 1 && MINOR < 2) )); then
+              MAJOR=1
+              MINOR=2
+              PATCH=0
+            else
+              PATCH=$((PATCH + 1))
+              if (( PATCH >= 100 )); then
+                PATCH=0
+                MINOR=$((MINOR + 1))
+              fi
+              if (( MINOR >= 100 )); then
+                MINOR=0
+                MAJOR=$((MAJOR + 1))
+              fi
+            fi
+          else
+            MAJOR=1
+            MINOR=2
+            PATCH=0
+          fi
+
+          APP_VERSION="$MAJOR.$MINOR.$PATCH"
+          TAG_VERSION="v$APP_VERSION"
+
+          echo "Calculated Next Release Version: $TAG_VERSION"
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_ENV
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_OUTPUT
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -28,24 +65,24 @@ jobs:
       - name: Publish Debian
         run: |
           dotnet publish -c Release -r linux-x64 --self-contained true \
-            -p:Version=1.0.0 \
-            -p:FileVersion=${{ env.FILE_VERSION }} \
+            -p:Version=${{ env.APP_VERSION }} \
+            -p:FileVersion=${{ env.APP_VERSION }} \
             -o publish/debian
           cd publish && zip -r AxarDB-debian.zip debian
 
       - name: Publish Windows
         run: |
           dotnet publish -c Release -r win-x64 --self-contained true \
-            -p:Version=1.0.0 \
-            -p:FileVersion=${{ env.FILE_VERSION }} \
+            -p:Version=${{ env.APP_VERSION }} \
+            -p:FileVersion=${{ env.APP_VERSION }} \
             -o publish/windows
           cd publish && zip -r AxarDB-windows.zip windows
 
       - name: Publish macOS
         run: |
           dotnet publish -c Release -r osx-x64 --self-contained true \
-            -p:Version=1.0.0 \
-            -p:FileVersion=${{ env.FILE_VERSION }} \
+            -p:Version=${{ env.APP_VERSION }} \
+            -p:FileVersion=${{ env.APP_VERSION }} \
             -o publish/macos
           cd publish && zip -r AxarDB-macos.zip macos
 
@@ -59,3 +96,11 @@ jobs:
             publish/AxarDB-debian.zip
             publish/AxarDB-windows.zip
             publish/AxarDB-macos.zip
+
+      - name: Delete older releases
+        uses: dev-drprasad/delete-older-releases@v0.3.3
+        with:
+          keep_latest: 1
+          delete_tags: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

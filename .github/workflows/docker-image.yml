@@ -5,6 +5,9 @@ on:
     branches: [ "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -12,6 +15,38 @@ jobs:
     steps:
       - name: Check out the repo
         uses: actions/checkout@v4
+
+      - name: Calculate version
+        id: versioning
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          LATEST_TAG=$(gh release list --limit 1 --json tagName --jq '.[0].tagName' 2>/dev/null || echo "")
+          LATEST_TAG="${LATEST_TAG#v}"
+
+          if [[ "$LATEST_TAG" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
+
+            if (( MAJOR < 1 || (MAJOR == 1 && MINOR < 2) )); then
+              MAJOR=1
+              MINOR=2
+              PATCH=0
+            fi
+          else
+            MAJOR=1
+            MINOR=2
+            PATCH=0
+          fi
+
+          APP_VERSION="$MAJOR.$MINOR.$PATCH"
+          TAG_VERSION="v$APP_VERSION"
+
+          echo "Calculated Version for Docker: $TAG_VERSION"
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_ENV
+          echo "APP_VERSION=$APP_VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_OUTPUT
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
@@ -28,5 +63,11 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ${{ secrets.DOCKERHUB_USERNAME }}/axardb:latest
+          build-args: |
+            APP_VERSION=${{ steps.versioning.outputs.APP_VERSION }}
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/axardb:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/axardb:${{ steps.versioning.outputs.TAG_VERSION }}
+            ${{ secrets.DOCKERHUB_USERNAME }}/axardb:${{ steps.versioning.outputs.APP_VERSION }}
+
 
