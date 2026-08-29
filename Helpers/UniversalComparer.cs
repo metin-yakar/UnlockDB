@@ -8,7 +8,7 @@ namespace AxarDB.Helpers
     {
         public static readonly UniversalComparer Instance = new UniversalComparer();
 
-        public int Compare(object x, object y)
+        public int Compare(object? x, object? y)
         {
             if (x == null && y == null) return 0;
             if (x == null) return -1;
@@ -27,8 +27,8 @@ namespace AxarDB.Helpers
                 {
                     try
                     {
-                        BigInteger b1 = x is BigInteger bx ? bx : BigInteger.Parse(x.ToString());
-                        BigInteger b2 = y is BigInteger by ? by : BigInteger.Parse(y.ToString());
+                        BigInteger b1 = x is BigInteger bx ? bx : BigInteger.Parse(x.ToString()!);
+                        BigInteger b2 = y is BigInteger by ? by : BigInteger.Parse(y.ToString()!);
                         return b1.CompareTo(b2);
                     }
                     catch { }
@@ -88,7 +88,7 @@ namespace AxarDB.Helpers
             return 0;
         }
 
-        private bool IsNumeric(object value)
+        private bool IsNumeric(object? value)
         {
             return value is sbyte
                 || value is byte
