@@ -86,12 +86,13 @@ jobs:
             -o publish/macos
           cd publish && zip -r AxarDB-macos.zip macos
 
-      - name: Create GitHub Draft Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.TAG_VERSION }}
           name: ${{ env.TAG_VERSION }}
-          draft: true
+          draft: false
+          body_path: release.md
           files: |
             publish/AxarDB-debian.zip
             publish/AxarDB-windows.zip
