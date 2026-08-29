@@ -112,10 +112,10 @@ namespace AxarDB.Bridges
             return new BulkResultSet(ordered, _store, _collectionName);
         }
 
-        public object max(Func<object, object> selector)
+        public object? max(Func<object, object> selector)
         {
             var values = _source.Select(d => selector(new DocumentWrapper(d))).Where(v => v != null);
-            object maxVal = null;
+            object? maxVal = null;
             var comparer = AxarDB.Helpers.UniversalComparer.Instance;
             foreach (var val in values)
             {
@@ -124,10 +124,10 @@ namespace AxarDB.Bridges
             return maxVal;
         }
 
-        public object min(Func<object, object> selector)
+        public object? min(Func<object, object> selector)
         {
             var values = _source.Select(d => selector(new DocumentWrapper(d))).Where(v => v != null);
-            object minVal = null;
+            object? minVal = null;
             var comparer = AxarDB.Helpers.UniversalComparer.Instance;
             foreach (var val in values)
             {
