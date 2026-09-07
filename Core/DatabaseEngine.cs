@@ -632,6 +632,7 @@ namespace AxarDB.Core
         public object? ExecuteScript(string script, System.Collections.Generic.IDictionary<string, object>? parameters = null, ScriptContext? context = null, CancellationToken cancellationToken = default)
         {
             var ctx = context ?? ScriptContext.Default; 
+            AxarDB.Core.BackupQuery.CurrentUser.Value = ctx.User;
             AxarDB.Logging.Logger.LogDebug($"[Engine] Executing script:\n{script}");
             // ---------------------------------------------------------
             // VAULTS FEATURE INITIALIZATION
