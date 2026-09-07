@@ -167,7 +167,17 @@ namespace AxarDB.Bridges
         /// Deletes all documents from this bulk collection by removing its JSONL file.
         /// After this call the collection will no longer appear in the sidebar.
         /// </summary>
-        public void delete() => _store.DropCollection(_collectionName);
+        public void delete(JsValue? predicate = null)
+        {
+            if (predicate == null || predicate.IsNull() || predicate.IsUndefined())
+            {
+                _store.DropCollection(_collectionName);
+            }
+            else
+            {
+                findall(predicate).delete();
+            }
+        }
 
         /// <summary>Count of all documents in this collection.</summary>
         public int count() => _store.GetDocuments(_collectionName).Count();

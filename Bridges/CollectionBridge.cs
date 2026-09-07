@@ -21,9 +21,16 @@ namespace AxarDB.Bridges
             _cancellationToken = cancellationToken;
         }
 
-        public void delete()
+        public void delete(Jint.Native.JsValue? predicate = null)
         {
-            _dbEngine.DeleteCollection(_collection.Name);
+            if (predicate == null || predicate.IsNull() || predicate.IsUndefined())
+            {
+                _dbEngine.DeleteCollection(_collection.Name);
+            }
+            else
+            {
+                findall(predicate).delete();
+            }
         }
 
         public void reload()
@@ -127,6 +134,22 @@ namespace AxarDB.Bridges
                 _collection.Insert(dict, _cancellationToken);
                 return dict;
             }
+
+            if (docObj is IEnumerable<object> enumerable)
+            {
+                var insertedList = new List<Dictionary<string, object>>();
+                foreach (var item in enumerable)
+                {
+                    var d = ConvertToDictionary(item);
+                    if (d != null)
+                    {
+                        _collection.Insert(d, _cancellationToken);
+                        insertedList.Add(d);
+                    }
+                }
+                return insertedList;
+            }
+
             return null;
         }
         
